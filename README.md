@@ -1,392 +1,288 @@
-﻿# MedAI - AI-Powered Healthcare Platform
+﻿# MedAI
 
-A full-stack healthcare platform combining AI-powered chat, digital prescriptions, medicine reminders, health tracking, lab test management, and pharmacy ordering.
+MedAI is a full-stack healthcare platform built with a React + Vite frontend and a FastAPI backend. It combines AI chat, user dashboards, health tracking, prescriptions, pharmacy ordering, lab test workflows, doctor/admin tools, and medical image diagnosis in one app.
 
-![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react) ![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb)
+This branch includes the MedMNIST diagnosis integration. The diagnosis pipeline now focuses on image-based inference with EfficientNet-B0 models trained on supported MedMNIST 2D subsets. Text-only chatbot input is handled by general chat, not diagnosis.
 
----
+## What The App Does
 
-## Tech Stack
+MedAI is organized around three main ideas:
 
-| Layer | Technologies |
-|---|---|
-| **Frontend** | React 18, Vite, Tailwind CSS, React Router, Axios, Recharts, Lucide React |
-| **Backend** | FastAPI, Python 3.11+, Pydantic, Motor (async MongoDB driver) |
-| **Database** | MongoDB Atlas (or local MongoDB), Redis (rate limiting & caching) |
-| **AI / LLM** | Gemini, OpenAI, HuggingFace, Ollama (configurable via `AI_PROVIDER`) |
-| **RAG** | LangChain + FAISS + ChromaDB + Sentence Transformers (local embeddings) |
-| **Auth** | JWT (python-jose), Google OAuth 2.0, OTP via SMS |
-| **Notifications** | Twilio (SMS), SendGrid (email) |
-| **Storage** | AWS S3 (optional — for file uploads) |
+1. Help patients get quick health guidance through AI chat and image analysis.
+2. Connect that guidance to practical next steps such as doctors, prescriptions, tests, reminders, and pharmacy ordering.
+3. Give admins and doctors dedicated dashboards for operational workflows.
 
----
+## Core Features
 
-## Implemented Features
+- AI-powered medical chat with optional RAG knowledge retrieval
+- Medical image diagnosis using MedMNIST + EfficientNet-B0
+- User registration, login, Google OAuth, and role-based access control
+- Patient dashboard features for health tracking, consultations, reminders, prescriptions, and orders
+- Doctor dashboard for patient management, consultations, appointments, and prescriptions
+- Admin dashboard for platform management, analytics, roles, settings, and doctor onboarding
+- Lab test browsing and tracking
+- Pharmacy product browsing and order flow
+- Document/image upload support for medical chat and extraction
+- Chatbot care bundles that suggest doctor roles and surface in-chat actions for doctor appointments, lab tests, pharmacy medicines, medicine reminders, and health tracking
 
-### Authentication
-- Email/password login and registration
-- Google OAuth 2.0 login
-- Mobile OTP authentication (SMS via Twilio)
-- JWT access + refresh token flow
-- Role-based access control: `patient`, `doctor`, `admin`
+## Diagnosis Flow
 
-### AI Chatbot
-- Natural language symptom input
-- File/image/PDF upload for medical document analysis
-- Multi-provider LLM support (switch via `AI_PROVIDER` in `.env`)
-- RAG-enhanced responses using local medical document corpus (FAISS + ChromaDB)
-- Chat session history with resume support
+The diagnosis pipeline is image-first:
 
-### AI Analysis
-- Symptom analysis via AI
-- Medical image / description analysis
-- Health trend analysis using logged vitals
-- Treatment path suggestions (self-care / consultation / emergency)
+1. A medical image is uploaded.
+2. The backend selects a MedMNIST modality, or auto-detects a suitable one when possible.
+3. EfficientNet-B0 runs inference using the loaded modality-specific weight file.
+4. The predicted disease is mapped to doctor guidance, treatment hints, suggested tests, and disease details.
+5. The AI layer generates a concise explanation, optionally enriched with RAG medical references.
 
-### Health Tracking
-- Daily vitals logging: blood pressure, blood sugar, heart rate, weight, temperature, oxygen, sleep, exercise, mood
-- Historical trend charts
-- Health analytics and risk scoring
+In the chatbot, text, image, PDF, and prescription inputs can also produce a MedMNIST + EfficientNet-B0 + Gemini + RAG care response with specialist suggestions and follow-up actions.
 
-### Medicine Reminders
-- Create, update, delete reminders
-- Bulk reminder creation from prescription (auto-maps frequency to morning/afternoon/evening/night)
-- Scheduled notification delivery (email + SMS)
-- Intake logging (taken / missed / skipped)
-- Medicine scan endpoint (barcode / prescription image)
+Supported MedMNIST modalities are configured in `backend/models/medmnist_labels.py`:
 
-### Prescriptions
-- Upload and AI-parse prescriptions (PDF, image, or text)
-- Extract medicines, dosage, frequency, instructions
-- Prescription history per patient
-- One-click add all medicines as reminders
+- `skin` for DermaMNIST
+- `pathology` for PathMNIST
+- `chest` for ChestMNIST
+- `oct` for OCTMNIST
+- `pneumonia` for PneumoniaMNIST
+- `retina` for RetinaMNIST
+- `blood` for BloodMNIST
+- `tissue` for TissueMNIST
+- `breast` for BreastMNIST
+- `organa` for OrganAMNIST
+- `organc` for OrganCMNIST
+- `organs` for OrganSMNIST
 
-### Lab Tests
-- Browse available tests with pricing
-- Book tests
-- Upload test reports
-- View booking history
+Common aliases such as `xray`, `lung`, `lungs`, `eye`, `organ-a`, `organ-c`, and `organ-s` are normalized to a supported modality.
 
-### Pharmacy & Orders
-- Browse and search products
-- Cart and checkout flow
-- Order management with status tracking
+## Backend Architecture
 
-### Doctor Portal
-- Doctor dashboard with patient stats
-- Patient list with consultation history
-- Write and manage prescriptions
-- Profile management (specialty, availability, fee, languages)
+The backend is a FastAPI application with these responsibilities:
 
-### Admin Portal
-- Platform statistics dashboard
-- User management (view, update roles)
-- Create doctor accounts
-- Analytics
+- API routing for auth, chat, health, medicine, doctor, admin, lab tests, products, orders, prescriptions, consultations, and diagnosis
+- MongoDB integration for persistent application data
+- Redis integration for cache or runtime support
+- JWT-based authentication and authorization middleware
+- rate limiting and centralized error handling
+- background reminder scheduling
+- AI services for chat, OCR, image description, RAG, and diagnosis explanations
 
-### Consultations
-- View past and upcoming consultations
-- Create consultation records
-- Update consultation status
+Key backend files:
 
-### Nearby Doctors
-- Search doctors by specialty, name, and city
-- Filter by consultation type (message / voice / video / appointment)
-- Book appointment or send message via modal
+- `backend/main.py` starts the app, registers middleware, mounts routers, and launches the reminder scheduler.
+- `backend/services/medical_image_pipeline.py` turns image predictions into structured diagnosis output.
+- `backend/services/image_diagnosis_service.py` loads the EfficientNet-B0 weights and performs image inference.
+- `backend/services/ai_service.py` connects to Gemini, Hugging Face, OpenAI, or Ollama.
+- `backend/routes/diagnose.py` exposes the medical image diagnosis API.
 
----
+## Frontend Architecture
+
+The frontend is a React application using Vite, React Router, Tailwind CSS, Framer Motion, and role-aware routing.
+
+It includes:
+
+- auth pages for login, registration, and OAuth success
+- patient pages for chatbot, health tracking, reminders, pharmacy, lab tests, prescriptions, consultations, profile, help, and about
+- admin pages for dashboard, users, roles, analytics, settings, and doctor creation
+- doctor pages for dashboard, patients, consultations, appointments, prescriptions, profile, and settings
 
 ## Project Structure
 
-```
-MedAi/
+```text
+MedAI/
 ├── backend/
-│   ├── main.py                    # FastAPI app, middleware, router registration
-│   ├── requirements.txt
 │   ├── config/
-│   │   ├── database.py            # MongoDB connection
-│   │   ├── redis.py               # Redis client
-│   │   └── settings.py            # Environment settings
 │   ├── middleware/
-│   │   ├── auth.py                # JWT verification
-│   │   ├── error_handler.py       # Global error handler
-│   │   └── rate_limiter.py        # Per-IP rate limiting
-│   ├── models/                    # Pydantic request/response models
-│   │   ├── user.py
-│   │   ├── chat.py
-│   │   ├── health.py
-│   │   ├── medicine.py
-│   │   ├── order.py
-│   │   ├── prescription.py
-│   │   ├── product.py
-│   │   └── lab_test.py
+│   ├── medical_docs/
+│   ├── models/
 │   ├── routes/
-│   │   ├── auth.py                # /api/auth
-│   │   ├── chat.py                # /api/chat
-│   │   ├── health.py              # /api/health
-│   │   ├── medicine.py            # /api/medicine
-│   │   ├── prescription.py        # /api/prescriptions
-│   │   ├── lab_test.py            # /api/lab-tests
-│   │   ├── product.py             # /api/products
-│   │   ├── order.py               # /api/orders
-│   │   ├── doctor.py              # /api/doctor
-│   │   ├── admin.py               # /api/admin
-│   │   ├── analysis.py            # /api/analysis
-│   │   └── consultations.py       # /api/consultations
-│   ├── services/
-│   │   ├── ai_service.py          # Multi-provider LLM client
-│   │   ├── rag_service.py         # LangChain + FAISS + ChromaDB RAG
-│   │   ├── health_analytics.py    # Trend analysis, risk scoring
-│   │   ├── notification_service.py # Twilio SMS + SendGrid email
-│   │   ├── reminder_scheduler.py  # Background medicine reminder scheduler
-│   │   ├── cache_service.py       # Redis cache helpers
-│   │   └── s3_service.py          # AWS S3 uploads
-│   └── medical_docs/              # RAG knowledge base text files
-│
+│   ├── scripts/
+│   └── services/
 └── frontend/
-    ├── package.json
-    ├── vite.config.js
-    └── src/
-        ├── App.jsx
-        ├── services/api.js         # Axios client + all API helpers
-        ├── context/
-        │   ├── AuthContext.jsx
-        │   └── ThemeContext.jsx
-        ├── components/
-        │   ├── ChatLayout.jsx
-        │   ├── DashboardLayout.jsx
-        │   ├── MainLayout.jsx
-        │   ├── Navigation.jsx
-        │   ├── Sidebar.jsx
-        │   └── RecommendationsPanel.jsx
-        └── pages/
-            ├── Login.jsx / Register.jsx
-            ├── Chatbot.jsx
-            ├── HealthTracking.jsx
-            ├── MedicineReminder.jsx / ScanMedicines.jsx
-            ├── PatientPrescriptions.jsx
-            ├── LabTests.jsx / MyLabTests.jsx
-            ├── Pharmacy.jsx / Orders.jsx
-            ├── Consultations.jsx / NearbyDoctors.jsx
-            ├── Profile.jsx
-            ├── DoctorDashboard.jsx / DoctorProfile.jsx
-            ├── DoctorAppointments.jsx / DoctorConsultations.jsx
-            ├── DoctorPrescriptions.jsx / PatientList.jsx
-            ├── AdminDashboard.jsx / AdminAnalytics.jsx
-            ├── UserManagement.jsx / CreateDoctor.jsx
-            └── About.jsx / Help.jsx
+	├── src/
+	│   ├── components/
+	│   ├── context/
+	│   ├── pages/
+	│   ├── services/
+	│   └── styles/
+	└── public/
 ```
 
----
+## Tech Stack
 
-## API Endpoints
+Backend:
 
-### Auth — `/api/auth`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/register` | Register with email/password |
-| POST | `/login` | Login with email/password |
-| POST | `/google` | Login with Google OAuth |
-| POST | `/request-otp` | Send OTP to mobile number |
-| POST | `/verify-otp` | Verify OTP, return tokens |
-| GET | `/me` | Get current user |
-| POST | `/logout` | Logout |
-| PUT | `/profile` | Update profile |
+- FastAPI
+- Uvicorn
+- MongoDB with Motor / PyMongo
+- Redis
+- JWT auth
+- Google OAuth
+- OpenAI / Gemini / Hugging Face / Ollama integration
+- FAISS / Chroma RAG support
+- PyTorch, torchvision, timm, and MedMNIST
 
-### Chat — `/api/chat`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/` | Send message to AI chatbot |
-| GET | `/sessions` | Get all chat sessions |
-| GET | `/sessions/{id}` | Get specific session |
-| DELETE | `/sessions/{id}` | Delete session |
+Frontend:
 
-### AI Analysis — `/api/analysis`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/symptoms` | Analyze symptoms |
-| POST | `/image` | Analyze medical image or description |
-| GET | `/health-trends` | Health trend analysis from logs |
+- React 18
+- Vite
+- React Router
+- Tailwind CSS
+- Framer Motion
+- Lucide icons
+- Recharts
+- Google OAuth client
 
-### Health — `/api/health`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/logs` | Create health log |
-| GET | `/logs` | Get health logs |
-| PUT | `/logs/{id}` | Update health log |
-| DELETE | `/logs/{id}` | Delete health log |
-| GET | `/analytics` | Get health analytics |
+## Environment Variables
 
-### Medicine — `/api/medicine`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/reminders` | Create reminder |
-| GET | `/reminders` | Get all reminders |
-| PUT | `/reminders/{id}` | Update reminder |
-| DELETE | `/reminders/{id}` | Delete reminder |
-| POST | `/bulk-reminders` | Create reminders from prescription |
-| POST | `/log` | Log medicine intake |
-| POST | `/scan` | Scan medicine barcode or prescription image |
+The backend reads settings from `backend/.env`. Common variables include:
 
-### Prescriptions — `/api/prescriptions`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/` | Create prescription |
-| GET | `/` | Get prescriptions |
-| GET | `/{id}` | Get specific prescription |
-| DELETE | `/{id}` | Delete prescription |
-| POST | `/parse` | AI-parse prescription (PDF/image/text) |
+```env
+MONGODB_URI=
+DB_NAME=medai
+REDIS_URL=redis://localhost:6379/0
 
-### Lab Tests — `/api/lab-tests`
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | Get available tests |
-| POST | `/book` | Book a test |
-| GET | `/bookings` | Get user bookings |
-| POST | `/bookings/{id}/upload-report` | Upload test report |
+JWT_SECRET_KEY=
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=30
 
-### Products — `/api/products`
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | List products |
-| GET | `/search` | Search products |
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:5173/auth/callback
 
-### Orders — `/api/orders`
-| Method | Path | Description |
-|---|---|---|
-| POST | `/` | Create order |
-| GET | `/` | Get orders |
-| PUT | `/{id}/status` | Update order status |
+AI_PROVIDER=gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
 
-### Doctor — `/api/doctor`
-| Method | Path | Description |
-|---|---|---|
-| GET | `/dashboard` | Doctor dashboard stats |
-| GET | `/patients` | Patient list |
-| GET | `/patients/{id}` | Patient details |
-| GET | `/search` | Search doctors by specialty/name/city |
-| PUT | `/profile` | Update doctor profile |
+HUGGINGFACE_API_KEY=
+HUGGINGFACE_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1
 
-### Admin — `/api/admin`
-| Method | Path | Description |
-|---|---|---|
-| GET | `/stats` | Platform statistics |
-| GET | `/users` | List all users |
-| PUT | `/users/{id}/role` | Update user role |
-| POST | `/create-doctor` | Create doctor account |
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-3.5-turbo
 
-### Consultations — `/api/consultations`
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | Get user consultations |
-| POST | `/` | Create consultation |
-| GET | `/{id}` | Get specific consultation |
-| PUT | `/{id}` | Update consultation |
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3
 
----
+CHROMA_PERSIST_DIR=./chroma_db
+FAISS_INDEX_PATH=./faiss_index
+```
 
-## Getting Started
+The frontend reads `frontend/.env` for values such as `VITE_GOOGLE_CLIENT_ID` and any API base URL you use in the browser app.
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- MongoDB Atlas (or local MongoDB)
-- Redis (local or cloud)
+## Local Setup
 
-### Backend Setup
+### Backend
+
+From the `backend` folder:
 
 ```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
 pip install -r requirements.txt
-```
-
-Create `backend/.env`:
-```env
-# Required
-MONGODB_URI=mongodb+srv://...
-JWT_SECRET_KEY=your-secret-key-min-32-chars
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
-# AI Provider (choose one)
-AI_PROVIDER=gemini
-GEMINI_API_KEY=your-gemini-api-key
-# HUGGINGFACE_API_KEY=
-# OPENAI_API_KEY=
-
-# Optional services
-REDIS_URL=redis://localhost:6379/0
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_PHONE_NUMBER=
-SENDGRID_API_KEY=
-SENDGRID_FROM_EMAIL=
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_S3_BUCKET=
-
-DEBUG=True
-```
-
-```bash
 python main.py
 ```
 
-API runs at `http://localhost:8000` — Swagger docs at `http://localhost:8000/docs`
+On Windows, you can also use `py -m pip install -r requirements.txt` and `py main.py`.
 
-### Frontend Setup
+### Frontend
+
+From the `frontend` folder:
 
 ```bash
 cd frontend
 npm install
-```
-
-Create `frontend/.env`:
-```env
-VITE_API_URL=http://localhost:8000
-VITE_GOOGLE_CLIENT_ID=your-google-client-id
-```
-
-```bash
 npm run dev
 ```
 
-App runs at `http://localhost:5173`
+## Reproducible MedMNIST Pipeline
 
----
+Use scripts as canonical training/evaluation entrypoints. The notebook is for visualization and iterative analysis.
 
-## AI Provider Options
+### Train one modality
 
-Set `AI_PROVIDER` in `backend/.env`:
+```bash
+cd backend
+python scripts/train_medmnist_efficientnet.py --modality skin --epochs 10 --batch-size 64 --seed 42
+```
 
-| Value | Env Key | Notes |
-|---|---|---|
-| `gemini` | `GEMINI_API_KEY` | Google Gemini — free tier, recommended |
-| `huggingface` | `HUGGINGFACE_API_KEY` | HuggingFace Inference API — free |
-| `openai` | `OPENAI_API_KEY` | OpenAI GPT — paid |
-| `ollama` | _(none)_ | Local — install Ollama separately |
+### Train all modalities
 
----
+```bash
+cd backend
+python scripts/train_medmnist_efficientnet.py --all --epochs 10 --batch-size 64 --seed 42
+```
 
-## Deployment
+### Evaluate checkpoints
 
-### Vercel + Render (Recommended)
+```bash
+cd backend
+python scripts/evaluate_medmnist_efficientnet.py --modalities skin pathology oct pneumonia retina breast --seed 42
+```
 
-**Frontend → Vercel:**
-1. Push to GitHub and connect the repo to Vercel
-2. Set environment variables: `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID`
+Outputs:
+- `backend/models/weights/*.pth` (checkpoints)
+- `backend/models/weights/train_<modality>.run_manifest.json`
+- `backend/models/weights/medmnist_eval_results.json`
+- `backend/models/weights/medmnist_eval_results.run_manifest.json`
 
-**Backend → Render:**
-1. Connect GitHub repository
-2. Runtime: Python
-3. Build command: `pip install -r requirements.txt`
-4. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. Add all `.env` variables in the Render dashboard
+## Important API Areas
 
-### Other Options
-- **AWS**: Elastic Beanstalk or App Runner
-- **Google Cloud**: Cloud Run
-- **Azure**: App Service
+- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/google`
+- `POST /api/chat` for general AI chat and document-assisted chat
+- `POST /api/analysis/*` for general AI-based health analysis
+- `POST /api/diagnose` for MedMNIST image diagnosis
+- `GET /api/diagnose/model-info` for loaded model details
+- `GET /api/health-check` for a simple service health response
+
+## Operational Notes
+
+- The backend starts a medicine reminder scheduler on startup.
+- CORS is configured for local frontend ports such as `5173`, `3000`, and `3001`.
+- The image diagnosis service loads modality-specific weight files from `backend/models/weights/`.
+- If no model weights are available, diagnosis requests will not work until the appropriate `.pth` files are present.
+- AI responses depend on the selected provider and its configured API key.
+- `/api/health-check` reports dependency state for MongoDB and Redis.
+
+## Quality Gates
+
+Backend:
+
+```bash
+cd backend
+pytest -q
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run test
+npm run build
+```
+
+CI:
+- GitHub Actions workflow: `.github/workflows/ci.yml`
+- Includes backend tests, frontend tests/build, and a basic secret-pattern guard.
+
+## Containerized Run
+
+```bash
+docker compose up --build
+```
+
+Services:
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
+- Redis: `localhost:6379`
+
+## Known Release Blockers
+
+- Local credentials currently remain in `backend/.env` by explicit user instruction in this workspace.
+- Before public release, rotate and remove all secrets from tracked history and switch to managed secret injection.
+
+## Safety Note
+
+MedAI provides AI-assisted guidance and preliminary assessment only. It does not replace a licensed healthcare professional, a formal diagnosis, or emergency care.
+
+## License
+
+This project is intended for educational and development use.

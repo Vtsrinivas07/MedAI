@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bot,
   Lock,
@@ -20,17 +21,18 @@ import {
   Trash2,
   FileText,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import ChatLayout from '../components/ChatLayout';
+import { diagnosisAPI, chatAPI } from '../services/api';
+import { API_BASE_URL as API_URL } from '../services/apiConfig';
 
-// Start with empty conversation
 const INITIAL_MESSAGES = [];
 
 function ChatHeader({ onNewChat, onToggleConversations }) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -75,7 +77,6 @@ function ChatHeader({ onNewChat, onToggleConversations }) {
             <MoreVertical className="w-5 h-5" />
           </button>
           
-          {/* Dropdown Menu */}
           {showMenu && (
             <div className="absolute right-0 mt-2 w-48 rounded-lg bg-sidebar border border-sidebar-border shadow-xl z-50">
               <button
@@ -109,7 +110,6 @@ function ChatHeader({ onNewChat, onToggleConversations }) {
 function ConversationsSidebar({ conversations, onSelectConversation, onClose, currentSessionId, onDeleteConversation }) {
   return (
     <aside className="w-[320px] flex-shrink-0 border-r border-sidebar-border bg-sidebar h-full flex flex-col">
-      {/* Header */}
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         <h3 className="text-white text-lg font-bold flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-primary" />
@@ -123,7 +123,6 @@ function ConversationsSidebar({ conversations, onSelectConversation, onClose, cu
         </button>
       </div>
 
-      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto p-3">
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -189,11 +188,80 @@ function ConversationsSidebar({ conversations, onSelectConversation, onClose, cu
   );
 }
 
+function normalizeForIntent(text) {
+  return (text || '')
+    .replace(/\*+/g, '')
+    .replace(/[_`#]/g, '')
+    .trim();
+}
+
+function shouldUseGeneralChat(text) {
+  const raw = (text || '').trim();
+  if (!raw) return true;
+  const t = normalizeForIntent(raw).toLowerCase();
+  if (t.length > 100) return false;
+
+  const medicalHint =
+    /\b(pain|hurt|hurts|ache|aching|fever|cough|rash|vomit|nausea|blood|dizzy|dizziness|chest|swollen|swelling|symptom|symptoms|headache|migraine|diarrhea|constipation|shortness|breath|wheez|palpitat|seizure|faint|blurred|lump|bleed|infection|uti|std|pregnant|dose|mg\b|ml\b|tablet|prescri|diagnos|tumor|cancer|stroke|heart attack|covid|flu|cold)\b/i.test(
+      t
+    );
+  if (medicalHint) return false;
+
+  const greetingOnly =
+    /^(hi+|hello+|hey+|howdy+|yo+|sup+|hiya+|gm\b|gn\b|good\s+(morning|afternoon|evening|night|day)\b|thanks|thank\s+you|thx|ty|ok+|okay|k\b|yes|no|yep|nope|bye|goodbye|ciao|see\s+ya|what'?s\s+up|whats\s+up|how\s+are\s+you|how\s+r\s+u|hru|what\s+can\s+you\s+do|who\s+are\s+you)[\s!?.,"']*$/i.test(
+      t
+    );
+  if (greetingOnly) return true;
+
+  const singleToken = /^[a-z']+$/i.test(t) && t.length <= 12;
+  if (singleToken && !medicalHint) {
+    const casualWords = new Set([
+      'hi',
+      'hello',
+      'hey',
+      'yo',
+      'sup',
+      'hiya',
+      'howdy',
+      'thanks',
+      'thx',
+      'ty',
+      'ok',
+      'okay',
+      'k',
+      'yes',
+      'no',
+      'yep',
+      'nope',
+      'bye',
+      'gm',
+      'gn',
+    ]);
+    if (casualWords.has(t)) return true;
+  }
+
+  if (t.length <= 24 && !/\d/.test(t) && !medicalHint) {
+    const wordCount = t.split(/\s+/).filter(Boolean).length;
+    if (wordCount <= 4 && !/\b(help|advise|feel|sick|ill|worried)\b/i.test(t)) return true;
+  }
+
+  return false;
+}
+
 const HEADING_REGEX = /^\*\*([^*]+?)\*\*:?\s*$/;
 const BULLET_REGEX = /^[•\-*]\s+(.*)$/;
 
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function formatInlineText(text) {
-  return text.replace(/\*\*([^*]+)\*\*/g, '<span class="font-semibold text-white">$1</span>');
+  const safe = escapeHtml(text);
+  return safe.replace(/\*\*([^*]+)\*\*/g, '<span class="font-semibold text-white">$1</span>');
 }
 
 function parseResponseSections(text) {
@@ -244,7 +312,6 @@ function parseResponseSections(text) {
   return sections;
 }
 
-// Helper function to parse and format response text
 function ParsedContent({ text }) {
   if (!text) return null;
 
@@ -285,6 +352,8 @@ function ParsedContent({ text }) {
 }
 
 function MessageBubble({ message }) {
+  const navigate = useNavigate();
+
   if (message.type === 'system') {
     return (
       <div className="flex justify-center my-2">
@@ -299,6 +368,17 @@ function MessageBubble({ message }) {
   if (message.type === 'assistant' && message.variant === 'diagnosis' && message.diagnosis) {
     const diagnosis = message.diagnosis;
     const confidencePercent = Math.round((diagnosis.confidence || 0) * 100);
+    const moduleRoutes = diagnosis.module_routes || {};
+
+    const moduleActions = [
+      { key: 'doctor_portal', label: 'Doctor Portal' },
+      { key: 'prescription_module', label: 'Prescriptions' },
+      { key: 'pharmacy', label: 'Pharmacy' },
+      { key: 'lab_tests', label: 'Lab Tests' },
+      { key: 'medicine_reminders', label: 'Medicine Reminders' },
+      { key: 'health_tracking', label: 'Health Tracking' },
+      { key: 'admin_dashboard', label: 'Admin Dashboard' },
+    ].filter((item) => moduleRoutes[item.key]);
 
     return (
       <div className="flex items-start gap-3 group">
@@ -309,7 +389,9 @@ function MessageBubble({ message }) {
         <div className="flex flex-col gap-1 items-start max-w-[90%]">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-muted text-xs">MedAI Assistant</p>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sidebar-hover text-muted">IMAGE</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sidebar-hover text-muted">
+              {(diagnosis.modality || 'TEXT').toUpperCase()}
+            </span>
           </div>
           <div className="rounded-2xl rounded-tl-none px-5 py-4 bg-sidebar-hover text-white shadow-sm border border-sidebar-border/50 w-full">
             <div className="space-y-4">
@@ -349,6 +431,25 @@ function MessageBubble({ message }) {
                   </ul>
                 </div>
               </div>
+
+              {moduleActions.length > 0 && (
+                <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted mb-3">Next Modules</p>
+                  <div className="flex flex-wrap gap-2">
+                    {moduleActions.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => navigate(moduleRoutes[item.key])}
+                        className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-primary/20 hover:border-primary/50 transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
@@ -393,15 +494,134 @@ function MessageBubble({ message }) {
     );
   }
 
+  if (message.type === 'assistant' && message.variant === 'care' && message.careBundle) {
+    const bundle = message.careBundle;
+    const routes = bundle.module_routes || {};
+    const actionButtons = (bundle.module_actions?.length
+      ? bundle.module_actions
+      : [
+          { key: 'doctor_appointment', label: 'Doctor Appointment' },
+          { key: 'lab_tests', label: 'Lab Tests' },
+          { key: 'pharmacy', label: 'Pharmacy Medicines' },
+          { key: 'medicine_reminders', label: 'Medicine Reminders' },
+          { key: 'health_tracking', label: 'Health Tracking' },
+        ]).filter((item) => routes[item.key]);
+    const modelStack = bundle.model_stack || {};
+
+    return (
+      <div className="flex items-start gap-3 group">
+        <div
+          className="w-10 h-10 rounded-full shrink-0 border-2 border-primary/30 shadow-[0_0_15px_rgba(19,127,236,0.3)] bg-cover bg-center"
+          style={{ backgroundImage: `url('${message.avatar}')` }}
+        />
+        <div className="flex flex-col gap-1 items-start max-w-[90%]">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-muted text-xs">MedAI Assistant</p>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sidebar-hover text-muted">CARE PLAN</span>
+          </div>
+          <div className="rounded-2xl rounded-tl-none px-5 py-4 bg-sidebar-hover text-white shadow-sm border border-sidebar-border/50 w-full space-y-4">
+            <ParsedContent text={message.content} />
+
+            {bundle.summary && (
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-50">
+                {bundle.summary}
+              </div>
+            )}
+
+            {Object.keys(modelStack).length > 0 && (
+              <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted mb-2">Model Stack</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {Object.entries(modelStack).map(([key, value]) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-gray-200"
+                    >
+                      <span className="font-semibold text-cyan-300">{key.replace(/_/g, ' ')}</span>
+                      <span>{value}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+              <p className="text-xs uppercase tracking-wide text-muted mb-2">Suggested Doctors</p>
+              <ul className="space-y-1 text-sm text-white">
+                {(bundle.doctor_suggestions || []).map((doc, idx) => (
+                  <li key={`${doc.role}-${idx}`} className="flex gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
+                    <span>{doc.role} ({doc.urgency}) - {doc.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {(bundle.next_actions || []).length > 0 && (
+              <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted mb-2">Next Actions</p>
+                <ul className="space-y-1 text-sm text-white">
+                  {bundle.next_actions.map((action, idx) => (
+                    <li key={`${action}-${idx}`} className="flex gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" />
+                      <span>{action}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {actionButtons.length > 0 && (
+              <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted mb-3">In-Chat Actions</p>
+                <div className="flex flex-wrap gap-2">
+                  {actionButtons.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => navigate(routes[item.key])}
+                      className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-primary/20 hover:border-primary/50 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="text-muted text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">
+            {message.time}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (message.type === 'user') {
     return (
       <div className="flex items-end gap-3 justify-end group">
-        <div className="flex flex-col gap-1 items-end max-w-[80%]">
+        <div className="flex flex-col gap-1 items-end max-w-[min(100%,520px)]">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-muted text-xs">You</p>
           </div>
+          {message.pdfPreview && (
+            <div className="w-full rounded-2xl rounded-tr-none overflow-hidden border border-white/20 bg-white/10 shadow-md">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/15 bg-black/20">
+                <FileText className="w-4 h-4 text-red-300 shrink-0" />
+                <span className="text-xs font-medium text-white truncate">{message.pdfName || 'Document.pdf'}</span>
+                <span className="text-[10px] uppercase tracking-wide text-white/70 ml-auto shrink-0">PDF</span>
+              </div>
+              <embed
+                src={`${message.pdfPreview}#toolbar=0&navpanes=0`}
+                type="application/pdf"
+                className="w-full h-[200px] bg-neutral-900"
+                title="PDF attachment preview"
+              />
+            </div>
+          )}
           <div className="rounded-2xl rounded-tr-none px-5 py-4 bg-primary text-white shadow-md">
-            <p className="text-base font-medium leading-relaxed">{message.content}</p>
+            <p className="text-base font-medium leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
           </div>
           <p className="text-muted text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">
             {message.time}
@@ -460,18 +680,37 @@ function ChatComposer({ onSendMessage, onNewChat }) {
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
-  const [selectedModality, setSelectedModality] = useState('skin');
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+  const [selectedModality, setSelectedModality] = useState('auto');
+  const [attachIntent, setAttachIntent] = useState('document');
   const [prescriptionParsing, setPrescriptionParsing] = useState(false);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const prescriptionInputRef = useRef(null);
 
+  useEffect(() => {
+    if (!selectedFile || selectedFile.type !== 'application/pdf') {
+      setPdfPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    const url = URL.createObjectURL(selectedFile);
+    setPdfPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [selectedFile]);
+
   const handleSend = () => {
     if (message.trim() || selectedFile) {
-      onSendMessage(message.trim(), selectedFile, selectedModality);
+      onSendMessage(message.trim(), selectedFile, selectedModality, attachIntent);
       setMessage('');
       setSelectedFile(null);
       setFilePreview(null);
+      setPdfPreviewUrl(null);
+      setAttachIntent('document');
     }
   };
 
@@ -482,17 +721,31 @@ function ChatComposer({ onSendMessage, onNewChat }) {
     }
   };
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
+  const handleFileSelectDoc = (e) => {
+    const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      setAttachIntent('document');
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => { setFilePreview(reader.result); };
         reader.readAsDataURL(file);
+      } else if (file.type === 'application/pdf') {
+        setFilePreview(null);
       } else {
         setFilePreview(null);
       }
+    }
+  };
+
+  const handleFileSelectImage = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setAttachIntent('diagnosis');
+      const reader = new FileReader();
+      reader.onloadend = () => { setFilePreview(reader.result); };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -505,7 +758,7 @@ function ChatComposer({ onSendMessage, onNewChat }) {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('save_to_db', 'true');
-      const res = await fetch('http://localhost:8000/api/prescriptions/upload', {
+      const res = await fetch(`${API_URL}/api/prescriptions/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
@@ -523,13 +776,29 @@ function ChatComposer({ onSendMessage, onNewChat }) {
           p.dietary_advice ? `**Dietary Advice:** ${p.dietary_advice}` : '',
         ].filter(Boolean).join('\n');
         onSendMessage(
-          `I've uploaded my prescription. Here's what was extracted:\n\n${summary}\n\nPlease advise me on how to follow this prescription, any precautions, and what lifestyle changes I should make.`
+          `I've uploaded my prescription. Here's what was extracted:\n\n${summary}\n\nPlease advise me on how to follow this prescription, any precautions, and what lifestyle changes I should make.`,
+          null,
+          'skin',
+          'document',
+          { preferChat: true }
         );
       } else {
-        onSendMessage(`I've uploaded a prescription file. Please help me understand it and advise on medicines and diet.`);
+        onSendMessage(
+          `I've uploaded a prescription file. Please help me understand it and advise on medicines and diet.`,
+          null,
+          'skin',
+          'document',
+          { preferChat: true }
+        );
       }
     } catch (err) {
-      onSendMessage(`I've uploaded a prescription. Please help me understand it.`);
+      onSendMessage(
+        `I've uploaded a prescription. Please help me understand it.`,
+        null,
+        'skin',
+        'document',
+        { preferChat: true }
+      );
     } finally {
       setPrescriptionParsing(false);
       if (prescriptionInputRef.current) prescriptionInputRef.current.value = '';
@@ -539,21 +808,39 @@ function ChatComposer({ onSendMessage, onNewChat }) {
   const removeFile = () => {
     setSelectedFile(null);
     setFilePreview(null);
+    setPdfPreviewUrl(null);
+    setAttachIntent('document');
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   return (
     <footer className="p-6 pt-2 bg-sidebar flex-shrink-0">
-      {/* Prescription parsing indicator */}
       {prescriptionParsing && (
         <div className="mb-3 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm">
           <Sparkles className="w-4 h-4 animate-pulse" />
           Analysing prescription with AI...
         </div>
       )}
-      {/* File Preview */}
-      {selectedFile && (
+      {selectedFile && selectedFile.type === 'application/pdf' && pdfPreviewUrl && (
+        <div className="mb-3 rounded-xl border border-sidebar-border bg-sidebar overflow-hidden shadow-lg">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-sidebar-border bg-sidebar-hover">
+            <FileText className="w-4 h-4 text-red-400 shrink-0" />
+            <span className="text-sm font-medium text-white truncate flex-1">{selectedFile.name}</span>
+            <span className="text-[10px] font-bold text-muted uppercase tracking-wide">PDF</span>
+            <button type="button" onClick={removeFile} className="text-red-400 hover:text-red-300 px-2 text-lg leading-none" aria-label="Remove file">
+              ×
+            </button>
+          </div>
+          <embed
+            src={`${pdfPreviewUrl}#toolbar=0&navpanes=0`}
+            type="application/pdf"
+            className="w-full h-[220px] bg-neutral-900"
+            title="PDF preview"
+          />
+        </div>
+      )}
+      {selectedFile && !(selectedFile.type === 'application/pdf' && pdfPreviewUrl) && (
         <div className="mb-3 p-3 rounded-lg bg-sidebar-hover border border-sidebar-border flex items-center gap-3">
           {filePreview ? (
             <img src={filePreview} alt="Preview" className="w-12 h-12 rounded object-cover" />
@@ -593,21 +880,30 @@ function ChatComposer({ onSendMessage, onNewChat }) {
             className="bg-sidebar border border-sidebar-border text-white text-xs rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-primary/40"
             title="Select medical image modality"
           >
+            <option value="auto">AUTO</option>
+            <option value="basic">BASIC</option>
             <option value="skin">Skin</option>
+            <option value="pathology">Pathology</option>
             <option value="chest">Chest X-ray</option>
-            <option value="eye">Eye</option>
-            <option value="brain">Brain</option>
+            <option value="oct">OCT</option>
+            <option value="pneumonia">Pneumonia</option>
+            <option value="retina">Retina</option>
+            <option value="blood">Blood</option>
+            <option value="tissue">Tissue</option>
+            <option value="breast">Breast</option>
+            <option value="organa">Organ A</option>
+            <option value="organc">Organ C</option>
+            <option value="organs">Organ S</option>
           </select>
-          <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" accept=".pdf,.doc,.docx,.txt" />
-          <button onClick={() => fileInputRef.current?.click()} className="p-2 text-muted hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Upload File">
+          <input ref={fileInputRef} type="file" onChange={handleFileSelectDoc} className="hidden" accept=".pdf,.doc,.docx,.txt,image/*" />
+          <button onClick={() => fileInputRef.current?.click()} className="p-2 text-muted hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Upload document (PDF, Word, text, or photo of a report for OCR)">
             <Paperclip className="w-5 h-5" />
           </button>
-          <input ref={imageInputRef} type="file" onChange={handleFileSelect} className="hidden" accept="image/*" />
-          <button onClick={() => imageInputRef.current?.click()} className="p-2 text-muted hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Upload Image">
+          <input ref={imageInputRef} type="file" onChange={handleFileSelectImage} className="hidden" accept="image/*" />
+          <button onClick={() => imageInputRef.current?.click()} className="p-2 text-muted hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Medical image analysis (skin, X-ray, etc.)">
             <Image className="w-5 h-5" />
           </button>
 
-          {/* Prescription Upload */}
           <input ref={prescriptionInputRef} type="file" onChange={handlePrescriptionUpload} className="hidden" accept="image/*,.pdf,.txt" />
           <button
             onClick={() => prescriptionInputRef.current?.click()}
@@ -637,21 +933,60 @@ function ChatComposer({ onSendMessage, onNewChat }) {
 function HealthInsightsPanel() {
   const [vitals, setVitals] = useState(null);
   const [reminders, setReminders] = useState([]);
+  const [modelInfo, setModelInfo] = useState(null);
+  const [modelInfoLoading, setModelInfoLoading] = useState(true);
+  const [modelInfoError, setModelInfoError] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (!token) return;
     const headers = { 'Authorization': `Bearer ${token}` };
-    fetch('http://localhost:8000/api/health/logs', { headers })
+    fetch(`${API_URL}/api/health/logs`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         const logs = Array.isArray(data) ? data : (data?.data || []);
         if (logs.length > 0) setVitals(logs[0]);
       }).catch(() => {});
-    fetch('http://localhost:8000/api/medicine/reminders?active_only=true', { headers })
+    fetch(`${API_URL}/api/medicine/reminders?active_only=true`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (Array.isArray(data)) setReminders(data.slice(0, 4)); })
       .catch(() => {});
+
+    let mounted = true;
+
+    const loadModelInfo = async () => {
+      try {
+        const res = await diagnosisAPI.getModelInfo();
+        if (!mounted) return;
+
+        if (res?.success && res?.data) {
+          setModelInfo(res.data);
+          setModelInfoError('');
+        } else {
+          setModelInfoError('Model status unavailable');
+        }
+      } catch {
+        if (mounted) setModelInfoError('Model status unavailable');
+      } finally {
+        if (mounted) setModelInfoLoading(false);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadModelInfo();
+      }
+    };
+
+    loadModelInfo();
+    const intervalId = setInterval(loadModelInfo, 20000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   const getBpStatus = (sys) => {
@@ -671,6 +1006,9 @@ function HealthInsightsPanel() {
   const vs = vitals?.vital_signs || {};
   const bpStatus = getBpStatus(vs.blood_pressure_systolic);
   const glucoseStatus = getGlucoseStatus(vs.blood_sugar);
+  const loadedCount = modelInfo?.loaded_modalities?.length || 0;
+  const supportedCount = modelInfo?.supported_modalities?.length || 0;
+  const missingModalities = modelInfo?.missing_modalities || [];
 
   return (
     <aside className="w-[340px] flex-shrink-0 flex-col border-l border-sidebar-border bg-sidebar h-full overflow-y-auto hidden xl:flex">
@@ -680,9 +1018,48 @@ function HealthInsightsPanel() {
           Health Insights
         </h3>
 
+        <div className="bg-sidebar-hover rounded-xl p-4 mb-4 border border-sidebar-border">
+          <p className="text-white text-sm font-semibold mb-2 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            MedMNIST Model Status
+          </p>
+
+          {modelInfoLoading ? (
+            <p className="text-muted text-xs">Checking loaded models...</p>
+          ) : modelInfoError ? (
+            <p className="text-red-400 text-xs">{modelInfoError}</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted mb-2">
+                Loaded {loadedCount}/{supportedCount} modalities
+              </p>
+              <div className="h-2 rounded-full bg-sidebar border border-sidebar-border overflow-hidden mb-3">
+                <div
+                  className="h-full bg-emerald-400"
+                  style={{ width: `${supportedCount ? (loadedCount / supportedCount) * 100 : 0}%` }}
+                />
+              </div>
+
+              {missingModalities.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-yellow-300 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Missing: {missingModalities.join(', ')}
+                  </p>
+                  <p className="text-[10px] text-muted">Train all command:</p>
+                  <p className="text-[10px] text-blue-300 break-all">
+                    {modelInfo?.training?.train_all_command || 'cd backend && python scripts/train_medmnist_efficientnet.py --all'}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-emerald-300">All configured MedMNIST models are loaded.</p>
+              )}
+            </>
+          )}
+        </div>
+
         {vitals ? (
           <div className="space-y-4">
-            {/* Vitals Cards */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-sidebar-hover rounded-xl p-3">
                 <p className="text-muted text-xs mb-1">Blood Pressure</p>
@@ -714,7 +1091,6 @@ function HealthInsightsPanel() {
               </div>
             </div>
 
-            {/* Today's Medicines */}
             {reminders.length > 0 && (
               <div className="bg-sidebar-hover rounded-xl p-4">
                 <p className="text-white text-sm font-semibold mb-3 flex items-center gap-2">
@@ -735,7 +1111,6 @@ function HealthInsightsPanel() {
               </div>
             )}
 
-            {/* Last Updated */}
             <p className="text-muted text-[10px] text-center">
               Last updated: {vitals.date ? new Date(vitals.date).toLocaleDateString() : 'Today'}
             </p>
@@ -772,14 +1147,13 @@ export default function Chatbot() {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  // Fetch conversations on mount
   useEffect(() => {
     fetchConversations();
   }, []);
 
   const fetchConversations = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/chat/sessions', {
+      const response = await fetch(`${API_URL}/api/chat/sessions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         }
@@ -796,7 +1170,7 @@ export default function Chatbot() {
 
   const loadConversation = async (convSessionId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/chat/sessions/${convSessionId}`, {
+      const response = await fetch(`${API_URL}/api/chat/sessions/${convSessionId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         }
@@ -806,7 +1180,6 @@ export default function Chatbot() {
         const session = await response.json();
         setSessionId(convSessionId);
         
-        // Convert session messages to display format
         const displayMessages = session.messages.map((msg, idx) => ({
           id: idx + 1,
           type: msg.role === 'user' ? 'user' : 'assistant',
@@ -836,7 +1209,7 @@ export default function Chatbot() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/chat/sessions/${convSessionId}`, {
+      const response = await fetch(`${API_URL}/api/chat/sessions/${convSessionId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -844,12 +1217,10 @@ export default function Chatbot() {
       });
       
       if (response.ok) {
-        // If deleted conversation is the current one, reset chat
         if (convSessionId === sessionId) {
           setMessages([]);
           setSessionId(null);
         }
-        // Refresh conversations list
         fetchConversations();
       } else {
         alert('Failed to delete conversation');
@@ -859,109 +1230,174 @@ export default function Chatbot() {
       alert('Error deleting conversation');
     }
   };
-  const handleSendMessage = async (content, file = null, modality = 'skin') => {
-    // Get current time
+  const handleSendMessage = async (
+    content,
+    file = null,
+    modality = 'basic',
+    attachIntent = 'document',
+    options = {}
+  ) => {
+    const preferChat = options && typeof options === 'object' && options.preferChat === true;
+
     const now = new Date();
     const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-    // Add user message
+    const userPdfUrl =
+      file && file.type === 'application/pdf' ? URL.createObjectURL(file) : null;
+
     const userMessage = {
       id: messages.length + 1,
       type: 'user',
       content: content || (file ? `[Attached: ${file.name}]` : ''),
       time: time,
       avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBkv4vcFz8KDsmGpfU3pVy6ZJh5z997ZJYeCKNEIQxq99GBj3o1fNlIG-k7gCaYHsnt4tCkKMkSeFcQSFH-8QlGqPhPxvR6n7CAOLGytqvlwvWz8rFeVwXyv-tNlI-QDRfZiOWM_TZB-tQ_xbBy1-jK1PdQ1f4eWsFWyj2tPzJ26751JuMDcwrsp8menuQUoML5AmxqNfT1ezcYhHjAuhY1T5YJbNpAd_aV7iBm0uFkLKTN4MW2rNIyNNKEyBYyGtRE1g37wKgDIzg',
+      ...(userPdfUrl ? { pdfPreview: userPdfUrl, pdfName: file.name } : {}),
     };
     setMessages(prev => [...prev, userMessage]);
 
-    // Show typing indicator
     setIsTyping(true);
 
     try {
       let response, data;
 
-      if (file && file.type.startsWith('image/')) {
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('modality', modality);
-        if (content) formData.append('symptoms', content);
-
-        response = await fetch('http://localhost:8000/api/diagnose', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: formData
+      if (file && file.type.startsWith('image/') && attachIntent === 'diagnosis') {
+        data = await diagnosisAPI.completeDiagnosis({
+          symptoms: content,
+          imageFile: file,
+          modality,
         });
       } else if (file) {
-        // Handle file upload
         const formData = new FormData();
         formData.append('file', file);
         if (content) formData.append('message', content);
         if (sessionId) formData.append('session_id', sessionId);
+        formData.append('use_rag', 'true');
 
-        response = await fetch('http://localhost:8000/api/chat/upload', {
+        response = await fetch(`${API_URL}/api/chat/upload`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('authToken')}`
           },
           body: formData
         });
-      } else {
-        // Regular text message
-        response = await fetch('http://localhost:8000/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: JSON.stringify({
-            message: content,
-            session_id: sessionId,
-            use_rag: false
-          })
-        });
+        const uploadPayload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const det = uploadPayload.detail;
+          const errText =
+            typeof det === 'string'
+              ? det
+              : Array.isArray(det)
+                ? det.map((d) => d.msg || d).join('; ')
+                : uploadPayload.message || 'File upload failed';
+          throw new Error(errText);
+        }
+        data = {
+          success: true,
+          session_id: uploadPayload.session_id,
+          message: uploadPayload.message,
+          care_bundle: uploadPayload.care_bundle,
+          sources: uploadPayload.sources,
+        };
+      } else if (!file) {
+        const chatRes = await chatAPI.sendMessage(content, sessionId, true);
+        data = {
+          success: true,
+          session_id: chatRes.session_id,
+          message: chatRes.message,
+          care_bundle: chatRes.care_bundle,
+          sources: chatRes.sources,
+          data: null,
+        };
       }
 
-      data = await response.json();
-      
-      if (response.ok) {
-        // Store session ID for conversation continuity
+      if (data?.success !== false) {
         if (data.session_id && !sessionId) {
           setSessionId(data.session_id);
           fetchConversations(); // Refresh conversation list when new session created
         }
 
-        // Add AI response
-        const diagnosisData = data?.data || data;
-        const aiMessage = diagnosisData?.disease
+        const diagnosisData = data?.data;
+        const normalizedDiagnosis = diagnosisData?.prediction
+          ? {
+              disease: diagnosisData.prediction?.disease,
+              confidence: diagnosisData.prediction?.confidence,
+              modality: diagnosisData.prediction?.modality || (diagnosisData.decision_layer?.path === 'image' ? 'skin' : 'text'),
+              doctor: diagnosisData.doctor_mapping,
+              treatment: diagnosisData.treatment,
+              tests: diagnosisData.tests,
+              explanation: diagnosisData.rag_llm_output,
+              disclaimer: diagnosisData.disclaimer,
+              module_routes: diagnosisData.module_routes,
+            }
+          : null;
+
+        const aiMessage = normalizedDiagnosis?.disease
           ? {
               id: messages.length + 2,
               type: 'assistant',
               variant: 'diagnosis',
-              content: `${diagnosisData.disease} detected with ${Math.round((diagnosisData.confidence || 0) * 100)}% confidence`,
-              diagnosis: diagnosisData,
+              content: `${normalizedDiagnosis.disease} detected with ${Math.round((normalizedDiagnosis.confidence || 0) * 100)}% confidence`,
+              diagnosis: normalizedDiagnosis,
+              time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA94h3IYI8Q6uNTNr6IN9L_pCWz_bAHhfvSVPQxriTMoD3eLnp9OeQrxL3gAUa8QBcgccv4lImUm8UtfbtwsKKufpSaKMkzqMplzUxE_rwtk2kD11mD5WDj-b-8E6Fm7AnIt8cBBhQH31vsJri6dE9uw_OLS1zNINrlzG6bEbGoybuP9qk7B4LDLWGrCCvXyMTlbrNB5M_A4BPaRs5W_W7KPmw4BS1Crvhd5wJ6VRSQvjZP9n_T2_yMGtTox6ZHcWlL5cuulwrkMks',
+            }
+          : data?.care_bundle
+          ? {
+              id: messages.length + 2,
+              type: 'assistant',
+              variant: 'care',
+              content: data?.message || 'Generated care guidance.',
+              careBundle: data.care_bundle,
               time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA94h3IYI8Q6uNTNr6IN9L_pCWz_bAHhfvSVPQxriTMoD3eLnp9OeQrxL3gAUa8QBcgccv4lImUm8UtfbtwsKKufpSaKMkzqMplzUxE_rwtk2kD11mD5WDj-b-8E6Fm7AnIt8cBBhQH31vsJri6dE9uw_OLS1zNINrlzG6bEbGoybuP9qk7B4LDLWGrCCvXyMTlbrNB5M_A4BPaRs5W_W7KPmw4BS1Crvhd5wJ6VRSQvjZP9n_T2_yMGtTox6ZHcWlL5cuulwrkMks',
             }
           : {
               id: messages.length + 2,
               type: 'assistant',
-              content: data.message,
+              content: data?.message || data?.data?.rag_llm_output || 'Unable to generate diagnosis output.',
               time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA94h3IYI8Q6uNTNr6IN9L_pCWz_bAHhfvSVPQxriTMoD3eLnp9OeQrxL3gAUa8QBcgccv4lImUm8UtfbtwsKKufpSaKMkzqMplzUxE_rwtk2kD11mD5WDj-b-8E6Fm7AnIt8cBBhQH31vsJri6dE9uw_OLS1zNINrlzG6bEbGoybuP9qk7B4LDLWGrCCvXyMTlbrNB5M_A4BPaRs5W_W7KPmw4BS1Crvhd5wJ6VRSQvjZP9n_T2_yMGtTox6ZHcWlL5cuulwrkMks',
             };
+
+        if (normalizedDiagnosis?.disease) {
+          localStorage.setItem(
+            'activeDiagnosis',
+            JSON.stringify({
+              disease: normalizedDiagnosis.disease,
+              confidence: normalizedDiagnosis.confidence,
+              modality: normalizedDiagnosis.modality,
+              doctor: normalizedDiagnosis.doctor,
+              treatment: normalizedDiagnosis.treatment,
+              tests: normalizedDiagnosis.tests,
+              explanation: normalizedDiagnosis.explanation,
+              disclaimer: normalizedDiagnosis.disclaimer,
+              module_routes: normalizedDiagnosis.module_routes,
+              updated_at: new Date().toISOString(),
+            })
+          );
+        }
+        if (data?.care_bundle) {
+          localStorage.setItem(
+            'activeCarePlan',
+            JSON.stringify({
+              ...data.care_bundle,
+              updated_at: new Date().toISOString(),
+            })
+          );
+        }
         setMessages(prev => [...prev, aiMessage]);
       } else {
-        throw new Error(data.detail || data?.message || 'Failed to get response');
+        throw new Error(data.detail || data?.message || 'Failed to get diagnosis response');
       }
     } catch (error) {
       console.error('Chat error:', error);
-      // Show error message
       const errorMessage = {
         id: messages.length + 2,
         type: 'assistant',
-        content: "I apologize, but I'm having trouble connecting right now. Please try again in a moment.",
+        content:
+          error?.message && String(error.message).length < 400
+            ? `**Could not complete request**\n\n${error.message}`
+            : "I apologize, but I'm having trouble connecting right now. Please try again in a moment.",
         time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA94h3IYI8Q6uNTNr6IN9L_pCWz_bAHhfvSVPQxriTMoD3eLnp9OeQrxL3gAUa8QBcgccv4lImUm8UtfbtwsKKufpSaKMkzqMplzUxE_rwtk2kD11mD5WDj-b-8E6Fm7AnIt8cBBhQH31vsJri6dE9uw_OLS1zNINrlzG6bEbGoybuP9qk7B4LDLWGrCCvXyMTlbrNB5M_A4BPaRs5W_W7KPmw4BS1Crvhd5wJ6VRSQvjZP9n_T2_yMGtTox6ZHcWlL5cuulwrkMks',
       };
@@ -974,7 +1410,6 @@ export default function Chatbot() {
   return (
     <ChatLayout>
       <div className="flex-1 flex h-full overflow-hidden">
-        {/* Conversations Sidebar */}
         {showConversations && (
           <ConversationsSidebar
             conversations={conversations}
@@ -985,17 +1420,14 @@ export default function Chatbot() {
           />
         )}
 
-        {/* Central Chat Area */}
         <div className="flex-1 flex flex-col min-w-0 relative">
           <ChatHeader 
             onNewChat={handleNewChat} 
             onToggleConversations={() => setShowConversations(!showConversations)}
           />
 
-          {/* Chat History */}
           <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
             {messages.length === 0 && !isTyping ? (
-              /* Empty State with Suggested Questions */
               <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
                 <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                   <Bot className="w-10 h-10 text-primary" />
@@ -1005,7 +1437,6 @@ export default function Chatbot() {
                   Your AI health assistant is ready to help. Describe your symptoms or ask health-related questions to get started.
                 </p>
 
-                {/* Suggested Questions */}
                 <div className="w-full max-w-xl">
                   <p className="text-gray-500 dark:text-[#9dabb9] text-xs font-semibold uppercase tracking-widest mb-4">Suggested Questions</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1031,7 +1462,6 @@ export default function Chatbot() {
               </div>
             ) : (
               <>
-                {/* Date Separator - Only show when there are messages */}
                 {messages.length > 0 && (
                   <div className="flex justify-center">
                     <span className="px-3 py-1 rounded-full bg-sidebar-hover text-muted text-xs font-medium">
@@ -1040,24 +1470,20 @@ export default function Chatbot() {
                   </div>
                 )}
 
-                {/* Messages */}
                 {messages.map((msg) => (
                   <MessageBubble key={msg.id} message={msg} />
                 ))}
 
-                {/* Typing Indicator */}
                 {isTyping && <TypingIndicator />}
               </>
             )}
 
-            {/* Bottom spacer and scroll anchor */}
             <div ref={messagesEndRef} className="h-4 w-full" />
           </div>
 
           <ChatComposer onSendMessage={handleSendMessage} onNewChat={handleNewChat} />
         </div>
 
-        {/* Right Sidebar */}
         <HealthInsightsPanel />
       </div>
     </ChatLayout>
