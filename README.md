@@ -23,6 +23,7 @@ MedAI is organized around three main ideas:
 - Lab test browsing and tracking
 - Pharmacy product browsing and order flow
 - Document/image upload support for medical chat and extraction
+- Chatbot care bundles that suggest doctor roles and surface in-chat actions for doctor appointments, lab tests, pharmacy medicines, medicine reminders, and health tracking
 
 ## Diagnosis Flow
 
@@ -33,6 +34,8 @@ The diagnosis pipeline is image-first:
 3. EfficientNet-B0 runs inference using the loaded modality-specific weight file.
 4. The predicted disease is mapped to doctor guidance, treatment hints, suggested tests, and disease details.
 5. The AI layer generates a concise explanation, optionally enriched with RAG medical references.
+
+In the chatbot, text, image, PDF, and prescription inputs can also produce a MedMNIST + EfficientNet-B0 + Gemini + RAG care response with specialist suggestions and follow-up actions.
 
 Supported MedMNIST modalities are configured in `backend/models/medmnist_labels.py`:
 

@@ -27,14 +27,12 @@ import ChatLayout from '../components/ChatLayout';
 import { diagnosisAPI, chatAPI } from '../services/api';
 import { API_BASE_URL as API_URL } from '../services/apiConfig';
 
-// Start with empty conversation
 const INITIAL_MESSAGES = [];
 
 function ChatHeader({ onNewChat, onToggleConversations }) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -79,7 +77,6 @@ function ChatHeader({ onNewChat, onToggleConversations }) {
             <MoreVertical className="w-5 h-5" />
           </button>
           
-          {/* Dropdown Menu */}
           {showMenu && (
             <div className="absolute right-0 mt-2 w-48 rounded-lg bg-sidebar border border-sidebar-border shadow-xl z-50">
               <button
@@ -113,7 +110,6 @@ function ChatHeader({ onNewChat, onToggleConversations }) {
 function ConversationsSidebar({ conversations, onSelectConversation, onClose, currentSessionId, onDeleteConversation }) {
   return (
     <aside className="w-[320px] flex-shrink-0 border-r border-sidebar-border bg-sidebar h-full flex flex-col">
-      {/* Header */}
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         <h3 className="text-white text-lg font-bold flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-primary" />
@@ -127,7 +123,6 @@ function ConversationsSidebar({ conversations, onSelectConversation, onClose, cu
         </button>
       </div>
 
-      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto p-3">
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -193,7 +188,6 @@ function ConversationsSidebar({ conversations, onSelectConversation, onClose, cu
   );
 }
 
-/** Strip markdown emphasis so "**HELLO**" is treated like "hello". */
 function normalizeForIntent(text) {
   return (text || '')
     .replace(/\*+/g, '')
@@ -201,9 +195,6 @@ function normalizeForIntent(text) {
     .trim();
 }
 
-/**
- * Greetings and tiny chit-chat should use general chat, not the diagnosis / triage pipeline.
- */
 function shouldUseGeneralChat(text) {
   const raw = (text || '').trim();
   if (!raw) return true;
@@ -260,7 +251,6 @@ function shouldUseGeneralChat(text) {
 const HEADING_REGEX = /^\*\*([^*]+?)\*\*:?\s*$/;
 const BULLET_REGEX = /^[•\-*]\s+(.*)$/;
 
-/** PDFs/labs often contain `<30`, `</b>` etc.; raw `<` breaks dangerouslySetInnerHTML. */
 function escapeHtml(text) {
   return text
     .replace(/&/g, '&amp;')
@@ -322,7 +312,6 @@ function parseResponseSections(text) {
   return sections;
 }
 
-// Helper function to parse and format response text
 function ParsedContent({ text }) {
   if (!text) return null;
 
@@ -505,6 +494,110 @@ function MessageBubble({ message }) {
     );
   }
 
+  if (message.type === 'assistant' && message.variant === 'care' && message.careBundle) {
+    const bundle = message.careBundle;
+    const routes = bundle.module_routes || {};
+    const actionButtons = (bundle.module_actions?.length
+      ? bundle.module_actions
+      : [
+          { key: 'doctor_appointment', label: 'Doctor Appointment' },
+          { key: 'lab_tests', label: 'Lab Tests' },
+          { key: 'pharmacy', label: 'Pharmacy Medicines' },
+          { key: 'medicine_reminders', label: 'Medicine Reminders' },
+          { key: 'health_tracking', label: 'Health Tracking' },
+        ]).filter((item) => routes[item.key]);
+    const modelStack = bundle.model_stack || {};
+
+    return (
+      <div className="flex items-start gap-3 group">
+        <div
+          className="w-10 h-10 rounded-full shrink-0 border-2 border-primary/30 shadow-[0_0_15px_rgba(19,127,236,0.3)] bg-cover bg-center"
+          style={{ backgroundImage: `url('${message.avatar}')` }}
+        />
+        <div className="flex flex-col gap-1 items-start max-w-[90%]">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-muted text-xs">MedAI Assistant</p>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sidebar-hover text-muted">CARE PLAN</span>
+          </div>
+          <div className="rounded-2xl rounded-tl-none px-5 py-4 bg-sidebar-hover text-white shadow-sm border border-sidebar-border/50 w-full space-y-4">
+            <ParsedContent text={message.content} />
+
+            {bundle.summary && (
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-50">
+                {bundle.summary}
+              </div>
+            )}
+
+            {Object.keys(modelStack).length > 0 && (
+              <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted mb-2">Model Stack</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {Object.entries(modelStack).map(([key, value]) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-gray-200"
+                    >
+                      <span className="font-semibold text-cyan-300">{key.replace(/_/g, ' ')}</span>
+                      <span>{value}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+              <p className="text-xs uppercase tracking-wide text-muted mb-2">Suggested Doctors</p>
+              <ul className="space-y-1 text-sm text-white">
+                {(bundle.doctor_suggestions || []).map((doc, idx) => (
+                  <li key={`${doc.role}-${idx}`} className="flex gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
+                    <span>{doc.role} ({doc.urgency}) - {doc.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {(bundle.next_actions || []).length > 0 && (
+              <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted mb-2">Next Actions</p>
+                <ul className="space-y-1 text-sm text-white">
+                  {bundle.next_actions.map((action, idx) => (
+                    <li key={`${action}-${idx}`} className="flex gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" />
+                      <span>{action}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {actionButtons.length > 0 && (
+              <div className="rounded-xl bg-sidebar border border-sidebar-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted mb-3">In-Chat Actions</p>
+                <div className="flex flex-wrap gap-2">
+                  {actionButtons.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => navigate(routes[item.key])}
+                      className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-primary/20 hover:border-primary/50 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="text-muted text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">
+            {message.time}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (message.type === 'user') {
     return (
       <div className="flex items-end gap-3 justify-end group">
@@ -589,7 +682,6 @@ function ChatComposer({ onSendMessage, onNewChat }) {
   const [filePreview, setFilePreview] = useState(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [selectedModality, setSelectedModality] = useState('auto');
-  /** paperclip / doc uploads → OCR & chat; image icon → medical image diagnosis model */
   const [attachIntent, setAttachIntent] = useState('document');
   const [prescriptionParsing, setPrescriptionParsing] = useState(false);
   const fileInputRef = useRef(null);
@@ -724,14 +816,12 @@ function ChatComposer({ onSendMessage, onNewChat }) {
 
   return (
     <footer className="p-6 pt-2 bg-sidebar flex-shrink-0">
-      {/* Prescription parsing indicator */}
       {prescriptionParsing && (
         <div className="mb-3 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm">
           <Sparkles className="w-4 h-4 animate-pulse" />
           Analysing prescription with AI...
         </div>
       )}
-      {/* File Preview */}
       {selectedFile && selectedFile.type === 'application/pdf' && pdfPreviewUrl && (
         <div className="mb-3 rounded-xl border border-sidebar-border bg-sidebar overflow-hidden shadow-lg">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-sidebar-border bg-sidebar-hover">
@@ -814,7 +904,6 @@ function ChatComposer({ onSendMessage, onNewChat }) {
             <Image className="w-5 h-5" />
           </button>
 
-          {/* Prescription Upload */}
           <input ref={prescriptionInputRef} type="file" onChange={handlePrescriptionUpload} className="hidden" accept="image/*,.pdf,.txt" />
           <button
             onClick={() => prescriptionInputRef.current?.click()}
@@ -971,7 +1060,6 @@ function HealthInsightsPanel() {
 
         {vitals ? (
           <div className="space-y-4">
-            {/* Vitals Cards */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-sidebar-hover rounded-xl p-3">
                 <p className="text-muted text-xs mb-1">Blood Pressure</p>
@@ -1003,7 +1091,6 @@ function HealthInsightsPanel() {
               </div>
             </div>
 
-            {/* Today's Medicines */}
             {reminders.length > 0 && (
               <div className="bg-sidebar-hover rounded-xl p-4">
                 <p className="text-white text-sm font-semibold mb-3 flex items-center gap-2">
@@ -1024,7 +1111,6 @@ function HealthInsightsPanel() {
               </div>
             )}
 
-            {/* Last Updated */}
             <p className="text-muted text-[10px] text-center">
               Last updated: {vitals.date ? new Date(vitals.date).toLocaleDateString() : 'Today'}
             </p>
@@ -1061,7 +1147,6 @@ export default function Chatbot() {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  // Fetch conversations on mount
   useEffect(() => {
     fetchConversations();
   }, []);
@@ -1095,7 +1180,6 @@ export default function Chatbot() {
         const session = await response.json();
         setSessionId(convSessionId);
         
-        // Convert session messages to display format
         const displayMessages = session.messages.map((msg, idx) => ({
           id: idx + 1,
           type: msg.role === 'user' ? 'user' : 'assistant',
@@ -1133,12 +1217,10 @@ export default function Chatbot() {
       });
       
       if (response.ok) {
-        // If deleted conversation is the current one, reset chat
         if (convSessionId === sessionId) {
           setMessages([]);
           setSessionId(null);
         }
-        // Refresh conversations list
         fetchConversations();
       } else {
         alert('Failed to delete conversation');
@@ -1157,14 +1239,12 @@ export default function Chatbot() {
   ) => {
     const preferChat = options && typeof options === 'object' && options.preferChat === true;
 
-    // Get current time
     const now = new Date();
     const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     const userPdfUrl =
       file && file.type === 'application/pdf' ? URL.createObjectURL(file) : null;
 
-    // Add user message
     const userMessage = {
       id: messages.length + 1,
       type: 'user',
@@ -1175,7 +1255,6 @@ export default function Chatbot() {
     };
     setMessages(prev => [...prev, userMessage]);
 
-    // Show typing indicator
     setIsTyping(true);
 
     try {
@@ -1192,6 +1271,7 @@ export default function Chatbot() {
         formData.append('file', file);
         if (content) formData.append('message', content);
         if (sessionId) formData.append('session_id', sessionId);
+        formData.append('use_rag', 'true');
 
         response = await fetch(`${API_URL}/api/chat/upload`, {
           method: 'POST',
@@ -1215,25 +1295,27 @@ export default function Chatbot() {
           success: true,
           session_id: uploadPayload.session_id,
           message: uploadPayload.message,
+          care_bundle: uploadPayload.care_bundle,
+          sources: uploadPayload.sources,
         };
       } else if (!file) {
-        const chatRes = await chatAPI.sendMessage(content, sessionId, false);
+        const chatRes = await chatAPI.sendMessage(content, sessionId, true);
         data = {
           success: true,
           session_id: chatRes.session_id,
           message: chatRes.message,
+          care_bundle: chatRes.care_bundle,
+          sources: chatRes.sources,
           data: null,
         };
       }
 
       if (data?.success !== false) {
-        // Store session ID for conversation continuity
         if (data.session_id && !sessionId) {
           setSessionId(data.session_id);
           fetchConversations(); // Refresh conversation list when new session created
         }
 
-        // Add AI response
         const diagnosisData = data?.data;
         const normalizedDiagnosis = diagnosisData?.prediction
           ? {
@@ -1256,6 +1338,16 @@ export default function Chatbot() {
               variant: 'diagnosis',
               content: `${normalizedDiagnosis.disease} detected with ${Math.round((normalizedDiagnosis.confidence || 0) * 100)}% confidence`,
               diagnosis: normalizedDiagnosis,
+              time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA94h3IYI8Q6uNTNr6IN9L_pCWz_bAHhfvSVPQxriTMoD3eLnp9OeQrxL3gAUa8QBcgccv4lImUm8UtfbtwsKKufpSaKMkzqMplzUxE_rwtk2kD11mD5WDj-b-8E6Fm7AnIt8cBBhQH31vsJri6dE9uw_OLS1zNINrlzG6bEbGoybuP9qk7B4LDLWGrCCvXyMTlbrNB5M_A4BPaRs5W_W7KPmw4BS1Crvhd5wJ6VRSQvjZP9n_T2_yMGtTox6ZHcWlL5cuulwrkMks',
+            }
+          : data?.care_bundle
+          ? {
+              id: messages.length + 2,
+              type: 'assistant',
+              variant: 'care',
+              content: data?.message || 'Generated care guidance.',
+              careBundle: data.care_bundle,
               time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA94h3IYI8Q6uNTNr6IN9L_pCWz_bAHhfvSVPQxriTMoD3eLnp9OeQrxL3gAUa8QBcgccv4lImUm8UtfbtwsKKufpSaKMkzqMplzUxE_rwtk2kD11mD5WDj-b-8E6Fm7AnIt8cBBhQH31vsJri6dE9uw_OLS1zNINrlzG6bEbGoybuP9qk7B4LDLWGrCCvXyMTlbrNB5M_A4BPaRs5W_W7KPmw4BS1Crvhd5wJ6VRSQvjZP9n_T2_yMGtTox6ZHcWlL5cuulwrkMks',
             }
@@ -1284,13 +1376,21 @@ export default function Chatbot() {
             })
           );
         }
+        if (data?.care_bundle) {
+          localStorage.setItem(
+            'activeCarePlan',
+            JSON.stringify({
+              ...data.care_bundle,
+              updated_at: new Date().toISOString(),
+            })
+          );
+        }
         setMessages(prev => [...prev, aiMessage]);
       } else {
         throw new Error(data.detail || data?.message || 'Failed to get diagnosis response');
       }
     } catch (error) {
       console.error('Chat error:', error);
-      // Show error message
       const errorMessage = {
         id: messages.length + 2,
         type: 'assistant',
@@ -1310,7 +1410,6 @@ export default function Chatbot() {
   return (
     <ChatLayout>
       <div className="flex-1 flex h-full overflow-hidden">
-        {/* Conversations Sidebar */}
         {showConversations && (
           <ConversationsSidebar
             conversations={conversations}
@@ -1321,17 +1420,14 @@ export default function Chatbot() {
           />
         )}
 
-        {/* Central Chat Area */}
         <div className="flex-1 flex flex-col min-w-0 relative">
           <ChatHeader 
             onNewChat={handleNewChat} 
             onToggleConversations={() => setShowConversations(!showConversations)}
           />
 
-          {/* Chat History */}
           <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
             {messages.length === 0 && !isTyping ? (
-              /* Empty State with Suggested Questions */
               <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
                 <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                   <Bot className="w-10 h-10 text-primary" />
@@ -1341,7 +1437,6 @@ export default function Chatbot() {
                   Your AI health assistant is ready to help. Describe your symptoms or ask health-related questions to get started.
                 </p>
 
-                {/* Suggested Questions */}
                 <div className="w-full max-w-xl">
                   <p className="text-gray-500 dark:text-[#9dabb9] text-xs font-semibold uppercase tracking-widest mb-4">Suggested Questions</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1367,7 +1462,6 @@ export default function Chatbot() {
               </div>
             ) : (
               <>
-                {/* Date Separator - Only show when there are messages */}
                 {messages.length > 0 && (
                   <div className="flex justify-center">
                     <span className="px-3 py-1 rounded-full bg-sidebar-hover text-muted text-xs font-medium">
@@ -1376,24 +1470,20 @@ export default function Chatbot() {
                   </div>
                 )}
 
-                {/* Messages */}
                 {messages.map((msg) => (
                   <MessageBubble key={msg.id} message={msg} />
                 ))}
 
-                {/* Typing Indicator */}
                 {isTyping && <TypingIndicator />}
               </>
             )}
 
-            {/* Bottom spacer and scroll anchor */}
             <div ref={messagesEndRef} className="h-4 w-full" />
           </div>
 
           <ChatComposer onSendMessage={handleSendMessage} onNewChat={handleNewChat} />
         </div>
 
-        {/* Right Sidebar */}
         <HealthInsightsPanel />
       </div>
     </ChatLayout>

@@ -5,6 +5,10 @@ import {
     Smile, Frown, Meh, Zap, Sparkles, Stethoscope, TestTube
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { 
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
+    ResponsiveContainer, AreaChart, Area 
+} from 'recharts';
 import { API_BASE_URL } from '../services/apiConfig';
 
 function ActiveDiagnosisBanner() {
@@ -69,10 +73,59 @@ function PrescriptionHealthBanner() {
     </div>
   );
 }
-import { 
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-    ResponsiveContainer, AreaChart, Area 
-} from 'recharts';
+
+function ActiveCarePlanBanner() {
+    const navigate = useNavigate();
+    const [cp, setCp] = useState(null);
+
+    useEffect(() => {
+        try {
+            setCp(JSON.parse(localStorage.getItem('activeCarePlan') || 'null'));
+        } catch {
+            setCp(null);
+        }
+    }, []);
+
+    if (!cp?.doctor_suggestions?.length && !cp?.summary) return null;
+
+    const routes = cp.module_routes || {};
+    const moduleActions = (cp.module_actions?.length
+        ? cp.module_actions
+        : [
+                { key: 'doctor_appointment', label: 'Doctor Appointment' },
+                { key: 'lab_tests', label: 'Lab Tests' },
+                { key: 'pharmacy', label: 'Pharmacy Medicines' },
+                { key: 'medicine_reminders', label: 'Medicine Reminders' },
+                { key: 'health_tracking', label: 'Health Tracking' },
+            ]).filter((item) => routes[item.key]);
+
+    return (
+        <div className="mx-6 mt-4 p-4 rounded-2xl bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 border border-cyan-500/20 flex flex-wrap items-start gap-3">
+            <Sparkles className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">Active Care Plan</p>
+                {cp.summary && <p className="text-xs text-gray-400 mt-1">{cp.summary}</p>}
+                {cp.doctor_suggestions?.length > 0 && (
+                    <p className="text-xs text-gray-400 mt-2">
+                        Suggested doctors: {cp.doctor_suggestions.slice(0, 3).map((doc) => doc.role).join(', ')}
+                    </p>
+                )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {moduleActions.map((action) => (
+                    <button
+                        key={action.key}
+                        onClick={() => navigate(routes[action.key])}
+                        className="text-xs text-cyan-300 hover:underline flex-shrink-0"
+                    >
+                        {action.label}
+                    </button>
+                ))}
+                <Link to="/chatbot" className="text-xs text-blue-400 hover:underline flex-shrink-0">Chatbot</Link>
+            </div>
+        </div>
+    );
+}
 import { healthAPI } from '../services/api';
 import ChatLayout from '../components/ChatLayout';
 
@@ -268,6 +321,7 @@ export default function HealthTracking() {
                 </div>
 
                 <ActiveDiagnosisBanner />
+                <ActiveCarePlanBanner />
                 <PrescriptionHealthBanner />
 
                 <div className="p-6 space-y-6">

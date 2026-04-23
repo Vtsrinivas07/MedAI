@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 from bson import ObjectId
 
@@ -31,3 +31,4 @@ class ChatResponse(BaseModel):
     sources: Optional[List[dict]] = None
     success: bool = True
     extracted_preview: Optional[str] = None
+    care_bundle: Optional[Dict[str, Any]] = None
