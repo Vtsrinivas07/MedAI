@@ -1,0 +1,772 @@
+"""
+Disease to Doctor Specialty Mappings
+Maps predicted diseases to appropriate medical specialists and treatment recommendations
+"""
+
+from typing import Dict
+
+
+# Disease to doctor specialty mapping
+DISEASE_TO_DOCTOR = {
+    "Acne": {
+        "specialty": "Dermatologist",
+        "urgency": "routine",
+        "consultation_type": "in-person or telemedicine",
+        "description": "Dermatologists specialize in treating skin conditions including acne"
+    },
+    "Eczema": {
+        "specialty": "Dermatologist",
+        "urgency": "routine",
+        "consultation_type": "in-person recommended",
+        "description": "Dermatologists can diagnose and treat various forms of eczema"
+    },
+    "Melanoma": {
+        "specialty": "Dermatologist (urgent referral to Oncologist if confirmed)",
+        "urgency": "urgent",
+        "consultation_type": "in-person immediately",
+        "description": "Melanoma requires immediate evaluation by a dermatologist and possible oncology referral"
+    },
+    "Psoriasis": {
+        "specialty": "Dermatologist",
+        "urgency": "soon",
+        "consultation_type": "in-person recommended",
+        "description": "Dermatologists specialize in managing chronic skin conditions like psoriasis"
+    },
+    "Vitiligo": {
+        "specialty": "Dermatologist",
+        "urgency": "routine",
+        "consultation_type": "in-person or telemedicine",
+        "description": "Dermatologists can help manage vitiligo and discuss treatment options"
+    },
+    "Rosacea": {
+        "specialty": "Dermatologist",
+        "urgency": "routine",
+        "consultation_type": "in-person or telemedicine",
+        "description": "Dermatologists can diagnose and manage rosacea symptoms"
+    },
+    "Normal": {
+        "specialty": "General Practitioner (routine checkup)",
+        "urgency": "none",
+        "consultation_type": "routine checkup or telemedicine",
+        "description": "No specific skin condition detected. Routine checkup recommended for overall health"
+    }
+}
+
+
+# Treatment recommendations by disease
+DISEASE_TREATMENTS = {
+    "Acne": {
+        "medications": [
+            "Topical retinoids (tretinoin, adapalene)",
+            "Benzoyl peroxide",
+            "Topical antibiotics (clindamycin)",
+            "Oral antibiotics (if moderate-severe)",
+            "Isotretinoin (for severe cases)"
+        ],
+        "lifestyle": [
+            "Wash face twice daily with gentle cleanser",
+            "Avoid touching or picking at acne",
+            "Use oil-free, non-comedogenic products",
+            "Manage stress levels",
+            "Stay hydrated"
+        ],
+        "next_steps": [
+            "Consult dermatologist for proper diagnosis",
+            "May need prescription medication",
+            "Consider diet modifications (reduce dairy, high-glycemic foods)",
+            "Regular follow-ups to monitor progress"
+        ]
+    },
+    "Eczema": {
+        "medications": [
+            "Topical corticosteroids",
+            "Moisturizers and emollients",
+            "Topical calcineurin inhibitors",
+            "Antihistamines for itching",
+            "Biologic medications (severe cases)"
+        ],
+        "lifestyle": [
+            "Use fragrance-free, hypoallergenic products",
+            "Take lukewarm baths, avoid hot water",
+            "Apply moisturizer immediately after bathing",
+            "Identify and avoid triggers",
+            "Wear soft, breathable fabrics"
+        ],
+        "next_steps": [
+            "See dermatologist for diagnosis and treatment plan",
+            "Patch testing to identify allergens",
+            "Develop a consistent skincare routine",
+            "Consider stress management techniques"
+        ]
+    },
+    "Melanoma": {
+        "medications": [
+            "⚠️ URGENT: Requires immediate medical evaluation",
+            "Surgical removal (primary treatment)",
+            "Immunotherapy (for advanced cases)",
+            "Targeted therapy",
+            "Radiation therapy (if needed)"
+        ],
+        "lifestyle": [
+            "IMMEDIATE CONSULTATION REQUIRED",
+            "Avoid further sun exposure",
+            "Use broad-spectrum SPF 50+ sunscreen daily",
+            "Perform monthly skin self-examinations",
+            "Schedule regular dermatology checkups"
+        ],
+        "next_steps": [
+            "⚠️ SEEK IMMEDIATE DERMATOLOGIST CONSULTATION",
+            "Biopsy to confirm diagnosis",
+            "Staging if melanoma is confirmed",
+            "Referral to oncologist if needed",
+            "Family members should also get skin checks"
+        ]
+    },
+    "Psoriasis": {
+        "medications": [
+            "Topical corticosteroids",
+            "Vitamin D analogs (calcipotriene)",
+            "Topical retinoids",
+            "Phototherapy (light therapy)",
+            "Systemic medications (methotrexate, cyclosporine)",
+            "Biologic drugs (for moderate-severe)"
+        ],
+        "lifestyle": [
+            "Keep skin moisturized",
+            "Avoid triggers (stress, alcohol, smoking)",
+            "Take short, lukewarm showers",
+            "Use gentle, fragrance-free products",
+            "Manage stress through meditation/yoga"
+        ],
+        "next_steps": [
+            "Consult dermatologist for treatment plan",
+            "May need combination therapy",
+            "Regular monitoring and follow-ups",
+            "Consider joining support groups",
+            "Screen for psoriatic arthritis"
+        ]
+    },
+    "Vitiligo": {
+        "medications": [
+            "Topical corticosteroids",
+            "Topical calcineurin inhibitors",
+            "Phototherapy (narrowband UVB)",
+            "Excimer laser therapy",
+            "Depigmentation (extensive cases)",
+            "JAK inhibitors (ruxolitinib - newer treatment)"
+        ],
+        "lifestyle": [
+            "Use sunscreen on all skin (SPF 30+)",
+            "Protect depigmented areas from sun",
+            "Cosmetic camouflage if desired",
+            "Manage psychological impact",
+            "Avoid skin trauma (Koebner phenomenon)"
+        ],
+        "next_steps": [
+            "See dermatologist to confirm diagnosis",
+            "Discuss treatment options based on extent",
+            "Consider counseling for psychological support",
+            "Regular follow-ups to monitor progression",
+            "May stabilize or repigment with treatment"
+        ]
+    },
+    "Rosacea": {
+        "medications": [
+            "Topical metronidazole",
+            "Topical azelaic acid",
+            "Oral antibiotics (doxycycline)",
+            "Topical ivermectin",
+            "Brimonidine (for redness)",
+            "Laser/light therapy for visible blood vessels"
+        ],
+        "lifestyle": [
+            "Identify and avoid triggers (spicy food, alcohol, hot drinks)",
+            "Use gentle, non-irritating skincare",
+            "Protect skin from sun and wind",
+            "Manage stress levels",
+            "Avoid hot showers and baths"
+        ],
+        "next_steps": [
+            "Consult dermatologist for proper diagnosis",
+            "Keep diary to identify triggers",
+            "Develop long-term management plan",
+            "Regular follow-ups to adjust treatment",
+            "Consider dietary modifications"
+        ]
+    },
+    "Normal": {
+        "medications": [
+            "No specific medication needed",
+            "Continue routine skincare",
+            "Use sunscreen daily (SPF 30+)"
+        ],
+        "lifestyle": [
+            "Maintain healthy skincare routine",
+            "Use gentle, pH-balanced cleanser",
+            "Moisturize regularly",
+            "Stay hydrated",
+            "Eat balanced diet rich in antioxidants"
+        ],
+        "next_steps": [
+            "Routine annual skin check recommended",
+            "Monitor for any changes in skin",
+            "Continue sun protection",
+            "Maintain overall healthy lifestyle"
+        ]
+    }
+}
+
+
+# Disease information for context
+DISEASE_INFO = {
+    "Acne": {
+        "medical_name": "Acne Vulgaris",
+        "description": "Common skin condition causing pimples, blackheads, and inflammation, typically on face, chest, and back",
+        "common_age": "Teenagers and young adults (can occur at any age)",
+        "prevalence": "Very common - affects 80% of people aged 11-30",
+        "causes": "Excess oil production, clogged pores, bacteria, inflammation, hormones"
+    },
+    "Eczema": {
+        "medical_name": "Atopic Dermatitis",
+        "description": "Chronic inflammatory skin condition causing itchy, red, dry patches",
+        "common_age": "Often begins in childhood, can persist or develop in adults",
+        "prevalence": "Common - affects 15-20% of children, 1-3% of adults",
+        "causes": "Genetic factors, immune system dysfunction, environmental triggers, skin barrier defects"
+    },
+    "Melanoma": {
+        "medical_name": "Malignant Melanoma",
+        "description": "Most serious type of skin cancer developing in melanocytes (pigment cells)",
+        "common_age": "Can occur at any age, risk increases with age",
+        "prevalence": "Less common but most dangerous skin cancer",
+        "causes": "UV radiation exposure, genetic factors, fair skin, many moles, family history"
+    },
+    "Psoriasis": {
+        "medical_name": "Psoriasis Vulgaris",
+        "description": "Chronic autoimmune condition causing rapid skin cell buildup, forming thick silvery scales and red patches",
+        "common_age": "Can develop at any age, peaks at 15-35 and 50-60",
+        "prevalence": "Common - affects 2-3% of population",
+        "causes": "Autoimmune disorder, genetic factors, triggered by stress, infections, medications"
+    },
+    "Vitiligo": {
+        "medical_name": "Vitiligo",
+        "description": "Condition causing loss of skin pigmentation in patches due to melanocyte destruction",
+        "common_age": "Often begins before age 30",
+        "prevalence": "Affects 0.5-2% of population, all skin types",
+        "causes": "Autoimmune destruction of melanocytes, genetic factors, possible triggers"
+    },
+    "Rosacea": {
+        "medical_name": "Rosacea",
+        "description": "Chronic inflammatory skin condition causing facial redness, visible blood vessels, and sometimes acne-like bumps",
+        "common_age": "Typically starts after age 30, peaks at 40-60",
+        "prevalence": "Common - affects 5-10% of population",
+        "causes": "Unknown exact cause, genetic factors, immune system, environmental triggers"
+    },
+    "Normal": {
+        "medical_name": "Healthy Skin",
+        "description": "No significant skin condition detected",
+        "common_age": "N/A",
+        "prevalence": "N/A",
+        "causes": "N/A"
+    }
+}
+
+
+DISEASE_TESTS = {
+    "Acne": [
+        "Clinical skin examination",
+        "Dermoscopy if diagnosis is uncertain",
+        "Hormonal evaluation if severe or persistent",
+    ],
+    "Eczema": [
+        "Clinical examination",
+        "Patch testing if allergic trigger is suspected",
+        "Skin biopsy if presentation is atypical",
+    ],
+    "Melanoma": [
+        "Urgent dermoscopy",
+        "Skin biopsy for histopathology",
+        "Sentinel node evaluation if confirmed",
+    ],
+    "Psoriasis": [
+        "Clinical examination",
+        "Skin biopsy if the diagnosis is uncertain",
+        "Screening for psoriatic arthritis if joint pain is present",
+    ],
+    "Vitiligo": [
+        "Clinical examination",
+        "Wood lamp examination",
+        "Autoimmune screening if clinically indicated",
+    ],
+    "Rosacea": [
+        "Clinical examination",
+        "Dermatoscopy if needed",
+        "Ocular assessment if eye symptoms are present",
+    ],
+    "Normal": [
+        "Routine skin check",
+        "Dermatology review if symptoms develop",
+    ],
+}
+
+
+MODALITY_DEFAULTS = {
+    "text": {
+        "doctor": {
+            "specialty": "General Physician",
+            "urgency": "routine",
+            "consultation_type": "in-person or teleconsultation",
+            "description": "Symptom-text ML triage (TF-IDF + classifier or keyword fallback); not a diagnosis.",
+        },
+        "tests": [
+            "Focused history and physical examination",
+            "Directed labs or imaging based on clinical suspicion",
+        ],
+        "treatment": {
+            "medications": ["No medications from triage alone—follow clinician guidance"],
+            "lifestyle": ["Rest, hydration, and monitoring as appropriate"],
+            "next_steps": ["Book appropriate specialty visit if symptoms persist or worsen"],
+        },
+        "info": {
+            "medical_name": "Symptom-based triage",
+            "description": "Text symptoms are scored by a lightweight ML model to suggest a likely category.",
+            "common_age": "Varies",
+            "prevalence": "N/A",
+            "causes": "Requires clinical evaluation",
+        },
+    },
+    "basic": {
+        "doctor": {
+            "specialty": "General Physician (informational only)",
+            "urgency": "routine",
+            "consultation_type": "education / general questions",
+            "description": "Basic mode uses general vision AI—not clinical EfficientNet models.",
+        },
+        "tests": [
+            "No automated clinical tests from Basic mode",
+            "Use a MedMNIST clinical modality for medical image triage",
+        ],
+        "treatment": {
+            "medications": ["Basic mode does not suggest medications"],
+            "lifestyle": ["Use BASIC for charts, screenshots, and general questions"],
+            "next_steps": [
+                "Switch to a MedMNIST image modality for clinical triage",
+                "See a clinician for health concerns",
+            ],
+        },
+        "info": {
+            "medical_name": "General visual description",
+            "description": "General-purpose image understanding, not a device diagnosis.",
+            "common_age": "N/A",
+            "prevalence": "N/A",
+            "causes": "N/A",
+        },
+    },
+    "skin": {
+        "doctor": {
+            "specialty": "Dermatologist",
+            "urgency": "routine",
+            "consultation_type": "in-person or telemedicine",
+            "description": "Dermatologist evaluation is recommended for skin findings.",
+        },
+        "tests": [
+            "Clinical skin examination",
+            "Dermoscopy for lesion review",
+            "Biopsy if the lesion is suspicious or atypical",
+        ],
+        "treatment": {
+            "medications": [
+                "Use treatment only after dermatologist confirmation",
+                "Avoid self-medicating with potent topical steroids",
+            ],
+            "lifestyle": [
+                "Protect skin from sun exposure",
+                "Avoid known irritants and allergens",
+            ],
+            "next_steps": [
+                "Schedule a dermatology consultation",
+                "Track symptoms and image progression over time",
+            ],
+        },
+        "info": {
+            "medical_name": "Unspecified Skin Condition",
+            "description": "AI detected a skin pattern not mapped to a curated condition profile.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires clinical evaluation",
+        },
+    },
+    "chest": {
+        "doctor": {
+            "specialty": "Pulmonologist / Chest Physician",
+            "urgency": "soon",
+            "consultation_type": "in-person or telemedicine",
+            "description": "Chest image findings should be reviewed by a pulmonary specialist.",
+        },
+        "tests": [
+            "Chest X-ray review by radiologist",
+            "CBC and inflammatory markers if indicated",
+            "CT chest if symptoms are persistent or severe",
+        ],
+        "treatment": {
+            "medications": ["Use medicines only after clinician confirmation"],
+            "lifestyle": ["Avoid smoking and pollutants", "Maintain hydration and rest"],
+            "next_steps": ["Book pulmonary consultation", "Seek urgent care for breathing distress"],
+        },
+        "info": {
+            "medical_name": "Unspecified Thoracic Finding",
+            "description": "AI detected a chest imaging pattern needing clinical correlation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires radiology and physician review",
+        },
+    },
+    "pneumonia": {
+        "doctor": {
+            "specialty": "Pulmonologist",
+            "urgency": "soon",
+            "consultation_type": "in-person",
+            "description": "Possible lower respiratory infection pattern requires timely clinical review.",
+        },
+        "tests": [
+            "Chest X-ray correlation",
+            "Pulse oximetry",
+            "CBC, CRP, and microbiology as indicated",
+        ],
+        "treatment": {
+            "medications": ["Antibiotics only if prescribed", "Supportive care per clinician"],
+            "lifestyle": ["Hydration", "Rest", "Monitor fever and breathing"],
+            "next_steps": ["Schedule same-day review if symptomatic", "Go to emergency for severe shortness of breath"],
+        },
+        "info": {
+            "medical_name": "Possible Pneumonic Pattern",
+            "description": "AI detected findings that can align with pneumonia; clinical confirmation is required.",
+            "common_age": "All ages",
+            "prevalence": "Common",
+            "causes": "Infectious and inflammatory causes",
+        },
+    },
+    "retina": {
+        "doctor": {
+            "specialty": "Ophthalmologist (Retina)",
+            "urgency": "soon",
+            "consultation_type": "in-person",
+            "description": "Retinal findings should be reviewed by an eye specialist.",
+        },
+        "tests": [
+            "Dilated fundus examination",
+            "Visual acuity and intraocular pressure",
+            "OCT and angiography if indicated",
+        ],
+        "treatment": {
+            "medications": ["Only per ophthalmology advice"],
+            "lifestyle": ["Control blood sugar and blood pressure", "Follow regular eye screening"],
+            "next_steps": ["Book retina consultation", "Seek urgent care for sudden vision loss"],
+        },
+        "info": {
+            "medical_name": "Unspecified Retinal Finding",
+            "description": "AI detected a retinal pattern requiring ophthalmology correlation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires retinal exam",
+        },
+    },
+    "oct": {
+        "doctor": {
+            "specialty": "Ophthalmologist",
+            "urgency": "soon",
+            "consultation_type": "in-person",
+            "description": "OCT findings should be interpreted by an ophthalmology specialist.",
+        },
+        "tests": [
+            "Comprehensive eye exam",
+            "Repeat OCT and fundus imaging",
+            "Visual function testing",
+        ],
+        "treatment": {
+            "medications": ["As advised by eye specialist"],
+            "lifestyle": ["Adhere to eye follow-up plan"],
+            "next_steps": ["Consult ophthalmology", "Urgent review for sudden visual changes"],
+        },
+        "info": {
+            "medical_name": "Unspecified OCT Finding",
+            "description": "AI detected an OCT feature that needs specialist review.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires clinical interpretation",
+        },
+    },
+    "pathology": {
+        "doctor": {
+            "specialty": "Pathologist / Oncologist",
+            "urgency": "soon",
+            "consultation_type": "in-person",
+            "description": "Pathology-image findings should be correlated with clinical and lab context.",
+        },
+        "tests": [
+            "Histopathology review",
+            "Immunohistochemistry as indicated",
+            "Relevant organ-specific workup",
+        ],
+        "treatment": {
+            "medications": ["Treatment only after pathology confirmation"],
+            "lifestyle": ["Follow specialist-led care plan"],
+            "next_steps": ["Review with pathology and treating specialist"],
+        },
+        "info": {
+            "medical_name": "Unspecified Pathology Pattern",
+            "description": "AI found a tissue/pathology pattern requiring expert interpretation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires pathology correlation",
+        },
+    },
+    "blood": {
+        "doctor": {
+            "specialty": "Hematologist",
+            "urgency": "soon",
+            "consultation_type": "in-person",
+            "description": "Blood-cell image findings may need hematology evaluation.",
+        },
+        "tests": [
+            "Complete blood count with differential",
+            "Peripheral smear review",
+            "Additional hematology tests as advised",
+        ],
+        "treatment": {
+            "medications": ["Only per hematology guidance"],
+            "lifestyle": ["Maintain follow-up and symptom log"],
+            "next_steps": ["Consult hematologist for confirmation"],
+        },
+        "info": {
+            "medical_name": "Unspecified Hematology Finding",
+            "description": "AI identified a blood image pattern that needs lab and clinical confirmation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires hematology workup",
+        },
+    },
+    "tissue": {
+        "doctor": {
+            "specialty": "Pathologist",
+            "urgency": "routine",
+            "consultation_type": "in-person",
+            "description": "Tissue-image findings should be interpreted with pathology review.",
+        },
+        "tests": [
+            "Pathology slide review",
+            "Confirmatory histology if needed",
+        ],
+        "treatment": {
+            "medications": ["No medications without diagnosis confirmation"],
+            "lifestyle": ["Follow specialist recommendations"],
+            "next_steps": ["Discuss findings with pathology/primary care team"],
+        },
+        "info": {
+            "medical_name": "Unspecified Tissue Pattern",
+            "description": "AI detected tissue morphology requiring specialist confirmation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires pathology interpretation",
+        },
+    },
+    "breast": {
+        "doctor": {
+            "specialty": "Breast Specialist / Oncologist",
+            "urgency": "soon",
+            "consultation_type": "in-person",
+            "description": "Breast image findings should be reviewed by breast specialist team.",
+        },
+        "tests": [
+            "Clinical breast examination",
+            "Targeted ultrasound or mammogram as advised",
+            "Biopsy if indicated",
+        ],
+        "treatment": {
+            "medications": ["Only after specialist confirmation"],
+            "lifestyle": ["Track new breast symptoms"],
+            "next_steps": ["Consult breast clinic"],
+        },
+        "info": {
+            "medical_name": "Unspecified Breast Finding",
+            "description": "AI detected a breast imaging pattern requiring specialist workup.",
+            "common_age": "Adult",
+            "prevalence": "Varies",
+            "causes": "Requires dedicated breast evaluation",
+        },
+    },
+    "organa": {
+        "doctor": {
+            "specialty": "Radiologist / Internal Medicine",
+            "urgency": "routine",
+            "consultation_type": "in-person",
+            "description": "Abdominal organ imaging findings require imaging-clinical correlation.",
+        },
+        "tests": ["Radiology review", "Organ-specific labs and follow-up imaging if needed"],
+        "treatment": {
+            "medications": ["Based on confirmed diagnosis"],
+            "lifestyle": ["Follow physician guidance"],
+            "next_steps": ["Consult internal medicine with imaging report"],
+        },
+        "info": {
+            "medical_name": "Unspecified Abdominal Organ Finding",
+            "description": "AI detected an abdominal organ pattern requiring clinical correlation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires diagnostic workup",
+        },
+    },
+    "organc": {
+        "doctor": {
+            "specialty": "Radiologist / Internal Medicine",
+            "urgency": "routine",
+            "consultation_type": "in-person",
+            "description": "Coronal organ imaging findings need specialist review.",
+        },
+        "tests": ["Radiology review", "Follow-up imaging as needed"],
+        "treatment": {
+            "medications": ["After diagnosis confirmation only"],
+            "lifestyle": ["Follow treating physician advice"],
+            "next_steps": ["Consult internal medicine / radiology"],
+        },
+        "info": {
+            "medical_name": "Unspecified Coronal Organ Finding",
+            "description": "AI identified a coronal organ pattern requiring physician interpretation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires radiology-clinical correlation",
+        },
+    },
+    "organs": {
+        "doctor": {
+            "specialty": "Radiologist / Internal Medicine",
+            "urgency": "routine",
+            "consultation_type": "in-person",
+            "description": "Sagittal organ imaging findings should be clinically correlated.",
+        },
+        "tests": ["Radiology review", "Organ-specific follow-up tests"],
+        "treatment": {
+            "medications": ["As advised by clinician after confirmation"],
+            "lifestyle": ["Keep symptom timeline for review"],
+            "next_steps": ["Discuss with physician and radiology"],
+        },
+        "info": {
+            "medical_name": "Unspecified Sagittal Organ Finding",
+            "description": "AI identified a sagittal organ pattern requiring specialist interpretation.",
+            "common_age": "Varies",
+            "prevalence": "Varies",
+            "causes": "Requires imaging and clinical evaluation",
+        },
+    },
+}
+
+def _normalize_modality(modality: str) -> str:
+    m = (modality or "").strip().lower()
+    if m in ("", "default"):
+        return "skin"
+    if m in ("txt",):
+        return "text"
+    if m in ("eye",):
+        return "retina"
+    if m in ("xray",):
+        return "chest"
+    if m in ("skin", "basic", "pathology", "chest", "oct", "pneumonia", "retina", "blood", "tissue", "breast", "organa", "organc", "organs"):
+        return m
+    return m
+
+
+def get_doctor_recommendation(disease: str, modality: str = "skin") -> Dict:
+    """
+    Get doctor specialty recommendation for a disease
+    
+    Args:
+        disease: Disease name
+        
+    Returns:
+        Dictionary with doctor information
+    """
+    if disease in DISEASE_TO_DOCTOR:
+        return DISEASE_TO_DOCTOR[disease]
+
+    modality_defaults = MODALITY_DEFAULTS.get(_normalize_modality(modality), MODALITY_DEFAULTS["skin"])
+    return modality_defaults["doctor"]
+
+
+def get_treatment_recommendations(disease: str, modality: str = "skin") -> Dict:
+    """
+    Get treatment recommendations for a disease
+    
+    Args:
+        disease: Disease name
+        
+    Returns:
+        Dictionary with treatment information
+    """
+    if disease in DISEASE_TREATMENTS:
+        return DISEASE_TREATMENTS[disease]
+
+    modality_defaults = MODALITY_DEFAULTS.get(_normalize_modality(modality), MODALITY_DEFAULTS["skin"])
+    return modality_defaults["treatment"]
+
+
+def get_disease_info(disease: str, modality: str = "skin") -> Dict:
+    """
+    Get general information about a disease
+    
+    Args:
+        disease: Disease name
+        
+    Returns:
+        Dictionary with disease information
+    """
+    if disease in DISEASE_INFO:
+        return DISEASE_INFO[disease]
+
+    modality_defaults = MODALITY_DEFAULTS.get(_normalize_modality(modality), MODALITY_DEFAULTS["skin"])
+    info = dict(modality_defaults["info"])
+    info["medical_name"] = disease
+    return info
+
+
+def get_full_disease_context(disease: str, confidence: float, modality: str = "skin") -> Dict:
+    """
+    Get complete context for a disease including doctor, treatment, and info
+    
+    Args:
+        disease: Disease name
+        confidence: Prediction confidence (0-1)
+        
+    Returns:
+        Comprehensive dictionary with all disease information
+    """
+    modality = _normalize_modality(modality)
+    doctor_info = get_doctor_recommendation(disease, modality=modality)
+    treatment_info = get_treatment_recommendations(disease, modality=modality)
+    disease_details = get_disease_info(disease, modality=modality)
+    test_recommendations = DISEASE_TESTS.get(disease)
+
+    if not test_recommendations:
+        test_recommendations = MODALITY_DEFAULTS.get(modality, MODALITY_DEFAULTS["skin"]).get("tests", [])
+    
+    # Adjust urgency based on confidence
+    urgency = doctor_info["urgency"]
+    if confidence < 0.7 and urgency == "urgent":
+        urgency = "soon"  # Lower urgency if confidence is low
+    
+    return {
+        "disease": disease,
+        "modality": modality,
+        "confidence": confidence,
+        "doctor": {
+            "specialty": doctor_info["specialty"],
+            "urgency": urgency,
+            "consultation_type": doctor_info["consultation_type"],
+            "description": doctor_info["description"]
+        },
+        "treatment": {
+            "medications": treatment_info["medications"],
+            "lifestyle": treatment_info["lifestyle"],
+            "next_steps": treatment_info["next_steps"]
+        },
+        "tests": test_recommendations,
+        "disease_info": disease_details
+    }

@@ -1,0 +1,129 @@
+{
+  "kind": "medmnist_evaluation_run",
+  "timestamp_utc": "2026-04-23T00:00:00Z",
+  "script": "backend/scripts/evaluate_medmnist_efficientnet.py",
+  "seed": 42,
+  "batch_size": 64,
+  "modalities_requested": [
+    "skin",
+    "pathology",
+    "oct",
+    "pneumonia",
+    "retina",
+    "blood",
+    "breast",
+    "organa",
+    "organc",
+    "organs"
+  ],
+  "modalities_evaluated": [
+    "skin",
+    "pathology",
+    "oct",
+    "pneumonia",
+    "retina",
+    "blood",
+    "breast",
+    "organa",
+    "organc",
+    "organs"
+  ],
+  "runtime": {
+    "python": "unknown",
+    "platform": "unknown",
+    "torch": "unknown",
+    "device": "cpu"
+  },
+  "results": [
+    {
+      "modality": "skin",
+      "task": "dermamnist",
+      "num_test_samples": 2005,
+      "accuracy": 0.1062,
+      "f1_macro": 0.0463,
+      "auc_macro": 0.5049,
+      "map_macro": null
+    },
+    {
+      "modality": "pathology",
+      "task": "pathmnist",
+      "num_test_samples": 7180,
+      "accuracy": 0.0586,
+      "f1_macro": 0.0123,
+      "auc_macro": 0.5214,
+      "map_macro": null
+    },
+    {
+      "modality": "oct",
+      "task": "octmnist",
+      "num_test_samples": 1000,
+      "accuracy": 0.25,
+      "f1_macro": 0.1,
+      "auc_macro": 0.4179,
+      "map_macro": null
+    },
+    {
+      "modality": "pneumonia",
+      "task": "pneumoniamnist",
+      "num_test_samples": 624,
+      "accuracy": 0.375,
+      "f1_macro": 0.2727,
+      "auc_macro": 0.57,
+      "map_macro": null
+    },
+    {
+      "modality": "retina",
+      "task": "retinamnist",
+      "num_test_samples": 400,
+      "accuracy": 0.435,
+      "f1_macro": 0.1213,
+      "auc_macro": 0.5152,
+      "map_macro": null
+    },
+    {
+      "modality": "blood",
+      "task": "bloodmnist",
+      "num_test_samples": 3421,
+      "accuracy": 0.0713,
+      "f1_macro": 0.0166,
+      "auc_macro": 0.4564,
+      "map_macro": null
+    },
+    {
+      "modality": "breast",
+      "task": "breastmnist",
+      "num_test_samples": 156,
+      "accuracy": 0.7308,
+      "f1_macro": 0.4222,
+      "auc_macro": 0.4337,
+      "map_macro": null
+    },
+    {
+      "modality": "organa",
+      "task": "organamnist",
+      "num_test_samples": 17778,
+      "accuracy": 0.0583,
+      "f1_macro": 0.01,
+      "auc_macro": 0.6315,
+      "map_macro": null
+    },
+    {
+      "modality": "organc",
+      "task": "organcmnist",
+      "num_test_samples": 8216,
+      "accuracy": 0.2233,
+      "f1_macro": 0.0332,
+      "auc_macro": 0.5163,
+      "map_macro": null
+    },
+    {
+      "modality": "organs",
+      "task": "organsmnist",
+      "num_test_samples": 8827,
+      "accuracy": 0.0504,
+      "f1_macro": 0.0087,
+      "auc_macro": 0.388,
+      "map_macro": null
+    }
+  ]
+}
